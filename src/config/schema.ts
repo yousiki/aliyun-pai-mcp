@@ -70,7 +70,7 @@ export const SettingsSchema = z.object({
   resourceId: z.string().min(1),
   credentials: CredentialsSchema,
   caller: CallerSchema.optional(),
-  codeSource: CodeSourceSchema,
+  codeSource: CodeSourceSchema.optional(),
   jobDefaults: JobDefaultsSchema,
   mounts: z.array(MountSchema),
 });

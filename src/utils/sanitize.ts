@@ -60,11 +60,11 @@ export interface SanitizedSettings {
   workspaceId: Settings["workspaceId"];
   resourceId: Settings["resourceId"];
   mounts: Settings["mounts"];
-  codeSource: {
-    codeSourceId: Settings["codeSource"]["codeSourceId"];
-    mountPath: Settings["codeSource"]["mountPath"];
-    defaultBranch: Settings["codeSource"]["defaultBranch"];
-    defaultCommit: Settings["codeSource"]["defaultCommit"];
+  codeSource?: {
+    codeSourceId: string;
+    mountPath: string;
+    defaultBranch: string;
+    defaultCommit: string | null | undefined;
   };
   jobDefaults: {
     jobType: Settings["jobDefaults"]["jobType"];
@@ -80,12 +80,14 @@ export function sanitizeSettings(settings: Settings): SanitizedSettings {
     workspaceId: settings.workspaceId,
     resourceId: settings.resourceId,
     mounts: sanitizeObject(settings.mounts),
-    codeSource: {
-      codeSourceId: settings.codeSource.codeSourceId,
-      mountPath: settings.codeSource.mountPath,
-      defaultBranch: settings.codeSource.defaultBranch,
-      defaultCommit: settings.codeSource.defaultCommit,
-    },
+    codeSource: settings.codeSource
+      ? {
+          codeSourceId: settings.codeSource.codeSourceId,
+          mountPath: settings.codeSource.mountPath,
+          defaultBranch: settings.codeSource.defaultBranch,
+          defaultCommit: settings.codeSource.defaultCommit,
+        }
+      : undefined,
     jobDefaults: {
       jobType: settings.jobDefaults.jobType,
       displayNamePrefix: settings.jobDefaults.displayNamePrefix,

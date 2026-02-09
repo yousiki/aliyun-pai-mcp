@@ -275,7 +275,7 @@ export default async function initCommand(): Promise<void> {
     }),
   ).trim();
 
-  let codeSourceId = "TODO";
+  let codeSourceId: string | undefined;
   let codeSourceMountPath = "/root/code";
   let codeSourceDefaultBranch = "main";
 
@@ -596,12 +596,14 @@ export default async function initCommand(): Promise<void> {
       accessKeySecret,
     },
     caller,
-    codeSource: {
-      codeSourceId,
-      mountPath: codeSourceMountPath,
-      defaultBranch: codeSourceDefaultBranch,
-      defaultCommit: null,
-    },
+    codeSource: codeSourceId
+      ? {
+          codeSourceId,
+          mountPath: codeSourceMountPath,
+          defaultBranch: codeSourceDefaultBranch,
+          defaultCommit: null,
+        }
+      : undefined,
     jobDefaults: {
       jobType,
       displayNamePrefix: projectPrefix,

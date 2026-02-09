@@ -63,12 +63,14 @@ export function registerJobSubmitTool(
         jobType: settings.jobDefaults.jobType,
         jobSpecs: buildJobSpecs(settings),
         userCommand: args.command,
-        codeSource: new CreateJobRequestCodeSource({
-          codeSourceId: settings.codeSource.codeSourceId,
-          branch: settings.codeSource.defaultBranch,
-          commit: args.codeCommit ?? settings.codeSource.defaultCommit ?? undefined,
-          mountPath: settings.codeSource.mountPath,
-        }),
+        codeSource: settings.codeSource
+          ? new CreateJobRequestCodeSource({
+              codeSourceId: settings.codeSource.codeSourceId,
+              branch: settings.codeSource.defaultBranch,
+              commit: args.codeCommit ?? settings.codeSource.defaultCommit ?? undefined,
+              mountPath: settings.codeSource.mountPath,
+            })
+          : undefined,
         dataSources: settings.mounts.map(
           (mount) =>
             new CreateJobRequestDataSources({

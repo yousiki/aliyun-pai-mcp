@@ -30,6 +30,11 @@ export function registerCodeSourceTools(
       description: "Show configured code source settings",
     },
     async (_extra) => {
+      if (!settings.codeSource) {
+        return {
+          content: [{ type: "text", text: "No code source configured." }],
+        };
+      }
       const result = sanitizeObject(settings.codeSource);
       return {
         content: [{ type: "text", text: toText(result) }],
@@ -44,6 +49,10 @@ export function registerCodeSourceTools(
       inputSchema: codeSourceUpdateInputSchema,
     },
     async (args, _extra) => {
+      if (!settings.codeSource) {
+        throw new Error("No code source configured in settings.");
+      }
+
       const request = new UpdateCodeSourceRequest({
         codeBranch: args.branch,
         codeCommit: args.commit,
