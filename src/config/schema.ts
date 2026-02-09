@@ -73,6 +73,7 @@ export const SettingsSchema = z.object({
   codeSource: CodeSourceSchema.optional(),
   jobDefaults: JobDefaultsSchema,
   mounts: z.array(MountSchema),
+  maxRunningJobs: z.number().int().positive().optional(),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;

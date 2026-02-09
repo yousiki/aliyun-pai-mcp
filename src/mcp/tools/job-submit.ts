@@ -3,6 +3,7 @@ import {
   CreateJobRequestCodeSource,
   CreateJobRequestDataSources,
   JobSpec,
+  ListJobsRequest,
 } from "@alicloud/pai-dlc20201203";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
@@ -10,7 +11,7 @@ import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
 import type { MountAccess, Settings } from "../../config/schema.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
-import { generateDisplayName } from "../../utils/validate.js";
+import { generateDisplayName, isActiveStatus } from "../../utils/validate.js";
 
 const jobSubmitInputSchema = {
   name: z
@@ -75,7 +76,9 @@ export function registerJobSubmitTool(
       description:
         "Submit a new DLC job. Only 'name' and 'command' are specified by the caller. " +
         "All other job parameters (image, GPU/CPU/memory, pod count, mounts, code source) " +
-        "are controlled by MCP settings. Use pai_config to inspect the current configuration.",
+        "are controlled by MCP settings. Use pai_config to inspect the current configuration. " +
+        "A concurrency limit is enforced per project prefix (default: 1 active job). " +
+        "If the limit is reached, the submission is rejected — stop or wait for existing jobs first.",
       inputSchema: jobSubmitInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -85,6 +88,36 @@ export function registerJobSubmitTool(
       },
     },
     async (args, _extra) => {
+      const maxRunning = settings.maxRunningJobs ?? 1;
+      const listResponse = await dlcClient.listJobs(
+        new ListJobsRequest({
+          workspaceId: settings.workspaceId,
+          showOwn: true,
+          displayName: settings.projectPrefix,
+          pageSize: 100,
+          pageNumber: 1,
+          sortBy: "GmtCreateTime",
+          order: "desc",
+        }),
+      );
+      const activeJobs =
+        listResponse.body?.jobs?.filter((job) => isActiveStatus(job.status ?? "")) ?? [];
+      if (activeJobs.length >= maxRunning) {
+        const jobSummary = activeJobs.map((j) => `  - ${j.displayName} (${j.status})`).join("\n");
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text:
+                `Concurrency limit reached: ${activeJobs.length}/${maxRunning} active job(s) for project '${settings.projectPrefix}'.\n` +
+                `Active jobs:\n${jobSummary}\n\n` +
+                "Wait for existing jobs to finish or stop them before submitting a new one.",
+            },
+          ],
+        };
+      }
+
       const displayName = generateDisplayName(settings.projectPrefix, args.name);
       const request = new CreateJobRequest({
         workspaceId: settings.workspaceId,

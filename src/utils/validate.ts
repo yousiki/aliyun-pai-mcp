@@ -40,3 +40,10 @@ export const TERMINAL_STATUSES = ["Succeeded", "Failed", "Stopped"] as const;
 export function isTerminalStatus(status: string): boolean {
   return TERMINAL_STATUSES.includes(status as (typeof TERMINAL_STATUSES)[number]);
 }
+
+/** Job statuses that occupy a concurrency slot. */
+export const ACTIVE_JOB_STATUSES = ["Running", "Waiting", "Queuing", "Creating"] as const;
+
+export function isActiveStatus(status: string): boolean {
+  return ACTIVE_JOB_STATUSES.includes(status as (typeof ACTIVE_JOB_STATUSES)[number]);
+}
