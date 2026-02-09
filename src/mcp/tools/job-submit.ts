@@ -23,11 +23,19 @@ const jobSubmitInputSchema = {
         "Final displayName will be: {projectPrefix}-{name}-{timestamp}.",
     ),
   command: z.string().min(1).describe("The shell command to run inside the container."),
+  codeBranch: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Git branch to checkout. Uses default branch from settings if omitted."),
   codeCommit: z
     .string()
     .min(1)
     .optional()
-    .describe("Git commit hash to checkout. Uses default from settings if omitted."),
+    .describe(
+      "Git commit hash to checkout. If omitted, the latest commit on the branch is used. " +
+        "Always specify this after 'git push' to ensure the job uses the exact code you pushed.",
+    ),
 } as unknown as ZodRawShapeCompat;
 
 function toText(payload: unknown): string {
@@ -129,8 +137,8 @@ export function registerJobSubmitTool(
         codeSource: settings.codeSource
           ? new CreateJobRequestCodeSource({
               codeSourceId: settings.codeSource.codeSourceId,
-              branch: settings.codeSource.defaultBranch,
-              commit: args.codeCommit ?? settings.codeSource.defaultCommit ?? undefined,
+              branch: args.codeBranch ?? settings.codeSource.defaultBranch,
+              commit: args.codeCommit ?? undefined,
               mountPath: settings.codeSource.mountPath,
             })
           : undefined,
