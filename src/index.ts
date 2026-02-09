@@ -1,0 +1,41 @@
+#!/usr/bin/env bun
+
+import { Command } from "commander";
+
+const program = new Command();
+
+program.name("aliyun-pai-mcp").version("0.3.0").description("MCP server for Aliyun PAI-DLC");
+
+program
+  .command("init")
+  .description("Initialize configuration")
+  .action(async () => {
+    const command = await import("./commands/init.js");
+    await command.default();
+  });
+
+program
+  .command("server")
+  .description("Start MCP server")
+  .action(async () => {
+    const command = await import("./commands/server.js");
+    await command.default();
+  });
+
+program
+  .command("doctor")
+  .description("Run diagnostics")
+  .action(async () => {
+    const command = await import("./commands/doctor.js");
+    await command.default();
+  });
+
+program
+  .command("dump-job-specs <jobId>")
+  .description("Dump job specs for a job")
+  .action(async (jobId: string) => {
+    const command = await import("./commands/dump-job-specs.js");
+    await command.default(jobId);
+  });
+
+program.parse();
