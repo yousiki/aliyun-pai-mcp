@@ -1,6 +1,7 @@
 import type WorkspaceClient from "@alicloud/aiworkspace20210204";
 import { UpdateCodeSourceRequest } from "@alicloud/aiworkspace20210204";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { z } from "zod";
 
 import type { Settings } from "../../config/schema.js";
@@ -10,14 +11,10 @@ function toText(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
 }
 
-const codeSourceUpdateInputSchema = z
-  .object({
-    branch: z.string().min(1).optional(),
-    commit: z.string().min(1).optional(),
-  })
-  .refine((value) => value.branch !== undefined || value.commit !== undefined, {
-    message: "At least one of 'branch' or 'commit' must be provided.",
-  });
+const codeSourceUpdateInputSchema = {
+  branch: z.string().min(1).optional(),
+  commit: z.string().min(1).optional(),
+} as unknown as ZodRawShapeCompat;
 
 export function registerCodeSourceTools(
   server: McpServer,
@@ -51,6 +48,10 @@ export function registerCodeSourceTools(
     async (args, _extra) => {
       if (!settings.codeSource) {
         throw new Error("No code source configured in settings.");
+      }
+
+      if (args.branch === undefined && args.commit === undefined) {
+        throw new Error("At least one of 'branch' or 'commit' must be provided.");
       }
 
       const request = new UpdateCodeSourceRequest({

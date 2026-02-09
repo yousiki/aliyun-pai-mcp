@@ -5,13 +5,14 @@ import {
   JobSpec,
 } from "@alicloud/pai-dlc20201203";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
 import type { Settings } from "../../config/schema.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 import { generateDisplayName } from "../../utils/validate.js";
 
-const jobSubmitInputSchema = z.object({
+const jobSubmitInputSchema = {
   name: z
     .string()
     .min(1)
@@ -26,7 +27,7 @@ const jobSubmitInputSchema = z.object({
     .min(1)
     .optional()
     .describe("Git commit hash to checkout. Uses default from settings if omitted."),
-});
+} as unknown as ZodRawShapeCompat;
 
 function toText(payload: unknown): string {
   return JSON.stringify(payload, null, 2);

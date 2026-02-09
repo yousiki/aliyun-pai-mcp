@@ -33,7 +33,7 @@ export const JobSimpleDefaultsSchema = z.object({
 
 export type JobSimpleDefaults = z.infer<typeof JobSimpleDefaultsSchema>;
 
-export const JobSpecSchema = z.record(z.unknown());
+export const JobSpecSchema = z.record(z.string(), z.unknown());
 
 export type JobSpec = z.infer<typeof JobSpecSchema>;
 

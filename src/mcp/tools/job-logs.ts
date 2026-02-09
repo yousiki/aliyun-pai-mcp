@@ -1,19 +1,20 @@
 import { GetJobRequest, GetPodLogsRequest } from "@alicloud/pai-dlc20201203";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
 import type { CallerIdentity } from "../../clients/sts.js";
 import type { Settings } from "../../config/schema.js";
 
-const jobLogsInputSchema = z.object({
+const jobLogsInputSchema = {
   jobId: z.string().min(1),
   podId: z.string().min(1).optional(),
   maxLines: z.number().int().positive().max(5000).optional().default(200),
-});
+} as unknown as ZodRawShapeCompat;
 
 export function registerJobLogsTool(
   server: McpServer,
-  settings: Settings,
+  _settings: Settings,
   dlcClient: DlcClientApi,
   callerIdentity: CallerIdentity,
 ): void {

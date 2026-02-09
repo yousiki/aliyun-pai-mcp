@@ -24,8 +24,12 @@ function ensureNotCancelled<T>(value: T | symbol): T {
   return value;
 }
 
-function requiredInput(label: string): (value: string) => string | undefined {
-  return (value: string) => {
+function requiredInput(label: string): (value: string | undefined) => string | undefined {
+  return (value: string | undefined) => {
+    if (typeof value !== "string") {
+      return `${label} is required.`;
+    }
+
     if (value.trim().length === 0) {
       return `${label} is required.`;
     }
@@ -489,9 +493,16 @@ export default async function initCommand(): Promise<void> {
         }),
       );
 
-      const jobsWithSpecs = (listJobsResponse.body?.jobs ?? []).filter(
-        (job) => job.jobId && (job.jobSpecs?.length ?? 0) > 0,
-      );
+      const jobsWithSpecs = (listJobsResponse.body?.jobs ?? [])
+        .filter((job) => (job.jobSpecs?.length ?? 0) > 0)
+        .flatMap((job) => {
+          const jobId = job.jobId?.trim();
+          if (!jobId) {
+            return [];
+          }
+
+          return [{ ...job, jobId }];
+        });
       spinner.stop(pc.green(`Found ${jobsWithSpecs.length} jobs with jobSpecs.`));
 
       if (jobsWithSpecs.length === 0) {
@@ -504,8 +515,8 @@ export default async function initCommand(): Promise<void> {
             options: [
               { value: "__skip__", label: "Skip (leave jobSpecs empty)" },
               ...jobsWithSpecs.map((job) => ({
-                value: job.jobId!,
-                label: job.displayName ?? job.jobId!,
+                value: job.jobId,
+                label: job.displayName ?? job.jobId,
                 hint: `${job.status ?? ""} · ${job.jobType ?? ""} · ${job.gmtCreateTime ?? ""}`,
               })),
             ],
@@ -543,8 +554,15 @@ export default async function initCommand(): Promise<void> {
           );
 
           const jobDataSources =
-            jobBody?.dataSources?.filter((dataSource) => dataSource.uri && dataSource.mountPath) ??
-            [];
+            jobBody?.dataSources?.flatMap((dataSource) => {
+              const uri = dataSource.uri?.trim();
+              const mountPath = dataSource.mountPath?.trim();
+              if (!uri || !mountPath) {
+                return [];
+              }
+
+              return [{ uri, mountPath }];
+            }) ?? [];
 
           if (jobDataSources.length > 0 && mounts.length === 0) {
             const importDataSourcesAsMounts = ensureNotCancelled(
@@ -557,8 +575,8 @@ export default async function initCommand(): Promise<void> {
             if (importDataSourcesAsMounts) {
               const importedMounts: Mount[] = jobDataSources.map((dataSource, index) => ({
                 name: `ds-${index}`,
-                uri: dataSource.uri!,
-                mountPath: dataSource.mountPath!,
+                uri: dataSource.uri,
+                mountPath: dataSource.mountPath,
                 mountAccess: "ReadWrite" as MountAccess,
               }));
 
