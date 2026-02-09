@@ -27,6 +27,12 @@ export function registerJobStopTool(
     {
       description: "Stop a running job",
       inputSchema: jobStopInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (args, _extra) => {
       const jobResponse = await dlcClient.getJob(args.jobId, new GetJobRequest({}));

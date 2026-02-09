@@ -26,6 +26,7 @@ export function registerJobGetTool(
     {
       description: "Get details for a specific job",
       inputSchema: jobGetInputSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args, _extra) => {
       const response = await dlcClient.getJob(args.jobId, new GetJobRequest({}));

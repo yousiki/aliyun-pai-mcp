@@ -25,6 +25,7 @@ export function registerCodeSourceTools(
     "pai_codesource_get",
     {
       description: "Show configured code source settings",
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (_extra) => {
       if (!settings.codeSource) {
@@ -44,6 +45,12 @@ export function registerCodeSourceTools(
     {
       description: "Update code source branch and/or commit",
       inputSchema: codeSourceUpdateInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (args, _extra) => {
       if (!settings.codeSource) {

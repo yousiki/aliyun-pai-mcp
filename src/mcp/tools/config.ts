@@ -18,6 +18,7 @@ export function registerConfigTool(server: McpServer, settings: Settings): void 
         "data source mounts, and code source configuration. " +
         "Call this first to understand what resources and mounts " +
         "will be used when submitting jobs.",
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (_extra) => {
       const result = sanitizeSettings(settings);

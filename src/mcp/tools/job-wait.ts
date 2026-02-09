@@ -30,6 +30,7 @@ export function registerJobWaitTool(
     {
       description: "Wait until a job reaches Running or Terminal status",
       inputSchema: jobWaitInputSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args, _extra) => {
       const deadline = Date.now() + args.timeoutSec * 1000;

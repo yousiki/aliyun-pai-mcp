@@ -18,6 +18,7 @@ export function registerWhoamiTool(
     "pai_whoami",
     {
       description: "Show current caller identity and workspace context",
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (_extra) => {
       const result = sanitizeObject({

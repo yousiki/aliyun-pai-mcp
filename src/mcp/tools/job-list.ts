@@ -24,6 +24,7 @@ export function registerJobListTool(
     {
       description: "List recent jobs for current project prefix",
       inputSchema: jobListInputSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args, _extra) => {
       const request = new ListJobsRequest({

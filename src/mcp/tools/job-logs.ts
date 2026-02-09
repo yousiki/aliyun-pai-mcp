@@ -23,6 +23,7 @@ export function registerJobLogsTool(
     {
       description: "Get pod logs for a job",
       inputSchema: jobLogsInputSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args, _extra) => {
       const jobResponse = await dlcClient.getJob(args.jobId, new GetJobRequest({}));

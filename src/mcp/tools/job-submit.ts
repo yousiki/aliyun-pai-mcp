@@ -68,6 +68,12 @@ export function registerJobSubmitTool(
         "All other job parameters (image, GPU/CPU/memory, pod count, mounts, code source) " +
         "are controlled by MCP settings. Use pai_config to inspect the current configuration.",
       inputSchema: jobSubmitInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (args, _extra) => {
       const displayName = generateDisplayName(settings.projectPrefix, args.name);
