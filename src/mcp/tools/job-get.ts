@@ -5,7 +5,6 @@ import type { DlcClientApi } from "../../clients/dlc.js";
 import type { CallerIdentity } from "../../clients/sts.js";
 import type { Settings } from "../../config/schema.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
-import { validateJobOwnership } from "../../utils/validate.js";
 
 const jobGetInputSchema = z.object({
   jobId: z.string().min(1),
@@ -38,34 +37,16 @@ export function registerJobGetTool(
         };
       }
 
-      const ownership = validateJobOwnership(job, settings.projectPrefix, callerIdentity.userId);
-      if (!ownership.valid) {
+      if (callerIdentity.userId && job.userId && job.userId !== callerIdentity.userId) {
         return {
           isError: true,
-          content: [{ type: "text", text: ownership.reason ?? "Job ownership validation failed." }],
+          content: [
+            { type: "text", text: `Job belongs to user '${job.userId}', not current user.` },
+          ],
         };
       }
 
-      const result = sanitizeObject({
-        jobId: job.jobId,
-        displayName: job.displayName,
-        status: job.status,
-        jobType: job.jobType,
-        reasonCode: job.reasonCode,
-        reasonMessage: job.reasonMessage,
-        gmtCreateTime: job.gmtCreateTime,
-        gmtRunningTime: job.gmtRunningTime,
-        gmtFinishTime: job.gmtFinishTime,
-        duration: job.duration,
-        pods:
-          job.pods?.map((pod) => ({
-            podId: pod.podId,
-            type: pod.type,
-            status: pod.status,
-            ip: pod.ip,
-            podUid: pod.podUid,
-          })) ?? [],
-      });
+      const result = sanitizeObject(JSON.parse(JSON.stringify(job)));
 
       return {
         content: [{ type: "text", text: toText(result) }],

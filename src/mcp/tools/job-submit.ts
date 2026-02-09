@@ -12,9 +12,20 @@ import { sanitizeObject } from "../../utils/sanitize.js";
 import { generateDisplayName } from "../../utils/validate.js";
 
 const jobSubmitInputSchema = z.object({
-  name: z.string().min(1),
-  command: z.string().min(1),
-  codeCommit: z.string().min(1).optional(),
+  name: z
+    .string()
+    .min(1)
+    .describe(
+      "Short task name (e.g. 'train', 'eval', 'debug'). " +
+        "Do NOT include the project prefix — it is prepended automatically. " +
+        "Final displayName will be: {projectPrefix}-{name}-{timestamp}.",
+    ),
+  command: z.string().min(1).describe("The shell command to run inside the container."),
+  codeCommit: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Git commit hash to checkout. Uses default from settings if omitted."),
 });
 
 function toText(payload: unknown): string {
@@ -51,7 +62,10 @@ export function registerJobSubmitTool(
   server.registerTool(
     "pai_job_submit",
     {
-      description: "Submit a new DLC job",
+      description:
+        "Submit a new DLC job. Only 'name' and 'command' are specified by the caller. " +
+        "All other job parameters (image, GPU/CPU/memory, pod count, mounts, code source) " +
+        "are controlled by MCP settings. Use pai_config to inspect the current configuration.",
       inputSchema: jobSubmitInputSchema,
     },
     async (args, _extra) => {

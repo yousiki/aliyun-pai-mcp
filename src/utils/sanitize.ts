@@ -53,44 +53,7 @@ export function sanitizeObject<T>(obj: T): T {
   return sanitizeValue(obj) as T;
 }
 
-export interface SanitizedSettings {
-  version: Settings["version"];
-  projectPrefix: Settings["projectPrefix"];
-  regionId: Settings["regionId"];
-  workspaceId: Settings["workspaceId"];
-  resourceId: Settings["resourceId"];
-  mounts: Settings["mounts"];
-  codeSource?: {
-    codeSourceId: string;
-    mountPath: string;
-    defaultBranch: string;
-    defaultCommit: string | null | undefined;
-  };
-  jobDefaults: {
-    jobType: Settings["jobDefaults"]["jobType"];
-    displayNamePrefix: Settings["jobDefaults"]["displayNamePrefix"];
-  };
-}
-
-export function sanitizeSettings(settings: Settings): SanitizedSettings {
-  return {
-    version: settings.version,
-    projectPrefix: settings.projectPrefix,
-    regionId: settings.regionId,
-    workspaceId: settings.workspaceId,
-    resourceId: settings.resourceId,
-    mounts: sanitizeObject(settings.mounts),
-    codeSource: settings.codeSource
-      ? {
-          codeSourceId: settings.codeSource.codeSourceId,
-          mountPath: settings.codeSource.mountPath,
-          defaultBranch: settings.codeSource.defaultBranch,
-          defaultCommit: settings.codeSource.defaultCommit,
-        }
-      : undefined,
-    jobDefaults: {
-      jobType: settings.jobDefaults.jobType,
-      displayNamePrefix: settings.jobDefaults.displayNamePrefix,
-    },
-  };
+export function sanitizeSettings(settings: Settings): Record<string, unknown> {
+  const { credentials: _credentials, caller: _caller, ...rest } = settings;
+  return sanitizeObject(rest) as Record<string, unknown>;
 }

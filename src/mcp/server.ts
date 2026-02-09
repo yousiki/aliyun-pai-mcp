@@ -5,13 +5,13 @@ import { createSTSClient, getCallerIdentity } from "../clients/sts.js";
 import { createWorkspaceClient } from "../clients/workspace.js";
 import { loadSettings } from "../config/loader.js";
 import { registerCodeSourceTools } from "./tools/codesource.js";
+import { registerConfigTool } from "./tools/config.js";
 import { registerJobGetTool } from "./tools/job-get.js";
 import { registerJobListTool } from "./tools/job-list.js";
 import { registerJobLogsTool } from "./tools/job-logs.js";
 import { registerJobStopTool } from "./tools/job-stop.js";
 import { registerJobSubmitTool } from "./tools/job-submit.js";
 import { registerJobWaitTool } from "./tools/job-wait.js";
-import { registerMountsTool } from "./tools/mounts.js";
 import { registerWhoamiTool } from "./tools/whoami.js";
 
 export async function startServer(): Promise<void> {
@@ -26,7 +26,7 @@ export async function startServer(): Promise<void> {
   const server = new McpServer({ name: "aliyun-pai-mcp", version: "0.3.0" });
 
   registerWhoamiTool(server, settings, stsClient, callerIdentity);
-  registerMountsTool(server, settings);
+  registerConfigTool(server, settings);
   registerCodeSourceTools(server, settings, workspaceClient);
   registerJobListTool(server, settings, dlcClient);
   registerJobGetTool(server, settings, dlcClient, callerIdentity);

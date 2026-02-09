@@ -4,7 +4,6 @@ import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
 import type { CallerIdentity } from "../../clients/sts.js";
 import type { Settings } from "../../config/schema.js";
-import { validateJobOwnership } from "../../utils/validate.js";
 
 const jobLogsInputSchema = z.object({
   jobId: z.string().min(1),
@@ -34,11 +33,12 @@ export function registerJobLogsTool(
         };
       }
 
-      const ownership = validateJobOwnership(job, settings.projectPrefix, callerIdentity.userId);
-      if (!ownership.valid) {
+      if (callerIdentity.userId && job.userId && job.userId !== callerIdentity.userId) {
         return {
           isError: true,
-          content: [{ type: "text", text: ownership.reason ?? "Job ownership validation failed." }],
+          content: [
+            { type: "text", text: `Job belongs to user '${job.userId}', not current user.` },
+          ],
         };
       }
 
