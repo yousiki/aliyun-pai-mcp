@@ -32,12 +32,16 @@ export function registerJobWaitTool(
       inputSchema: jobWaitInputSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async (args, _extra) => {
+    async (args, extra) => {
       const deadline = Date.now() + args.timeoutSec * 1000;
+      const progressToken = extra._meta?.progressToken;
+      const totalPolls = Math.ceil(args.timeoutSec / args.pollSec);
       let isOwnershipValidated = false;
       let lastStatus = "Unknown";
+      let pollCount = 0;
 
       while (Date.now() <= deadline) {
+        pollCount++;
         const response = await dlcClient.getJob(args.jobId, new GetJobRequest({}));
         const job = response.body;
 
@@ -90,6 +94,21 @@ export function registerJobWaitTool(
           return {
             content: [{ type: "text", text: toText(result) }],
           };
+        }
+
+        // Send progress notification to keep the MCP client timeout alive.
+        // Clients with resetTimeoutOnProgress will reset their request timeout
+        // each time they receive this notification, preventing premature -32001 errors.
+        if (progressToken !== undefined) {
+          await extra.sendNotification({
+            method: "notifications/progress",
+            params: {
+              progressToken,
+              progress: pollCount,
+              total: totalPolls,
+              message: `Waiting for '${args.target}': poll ${pollCount}, current status '${status}'`,
+            },
+          });
         }
 
         await Bun.sleep(args.pollSec * 1000);
