@@ -2,7 +2,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createDLCClient } from "../clients/dlc.js";
 import { createSTSClient, getCallerIdentity } from "../clients/sts.js";
-import { createWorkspaceClient } from "../clients/workspace.js";
 import { loadSettings } from "../config/loader.js";
 import { registerCodeSourceTools } from "./tools/codesource.js";
 import { registerConfigTool } from "./tools/config.js";
@@ -19,7 +18,6 @@ export async function startServer(): Promise<void> {
 
   const stsClient = createSTSClient(settings.credentials, settings.regionId);
   const dlcClient = createDLCClient(settings.credentials, settings.regionId);
-  const workspaceClient = createWorkspaceClient(settings.credentials, settings.regionId);
 
   const callerIdentity = await getCallerIdentity(stsClient);
 
@@ -27,7 +25,7 @@ export async function startServer(): Promise<void> {
 
   registerWhoamiTool(server, settings, stsClient, callerIdentity);
   registerConfigTool(server, settings);
-  registerCodeSourceTools(server, settings, workspaceClient);
+  registerCodeSourceTools(server, settings);
   registerJobListTool(server, settings, dlcClient);
   registerJobGetTool(server, settings, dlcClient, callerIdentity);
   registerJobSubmitTool(server, settings, dlcClient);
