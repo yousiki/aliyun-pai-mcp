@@ -1,7 +1,7 @@
 # MCP TOOLS MODULE
 
 ## OVERVIEW
-MCP tool implementations for Aliyun PAI-DLC operations. 9 TypeScript files registering 10 MCP tools (codesource.ts registers 2).
+MCP tool implementations for Aliyun PAI-DLC operations. 9 TypeScript files registering 9 MCP tools.
 
 ## STRUCTURE
 ```
@@ -14,7 +14,7 @@ tools/
 ├── job-logs.ts        # pai_job_logs
 ├── config.ts          # pai_config
 ├── whoami.ts          # pai_whoami
-└── codesource.ts      # pai_codesource_get + pai_codesource_update
+└── codesource.ts      # pai_codesource_get
 ```
 
 ## WHERE TO LOOK
@@ -29,7 +29,7 @@ tools/
 | Get logs | job-logs.ts | `registerJobLogsTool()` |
 | Show config | config.ts | `registerConfigTool()` |
 | Show identity | whoami.ts | `registerWhoamiTool()` |
-| Manage code source | codesource.ts | `registerCodeSourceTools()` |
+| Get code source info | codesource.ts | `registerCodeSourceTools()` |
 
 ## CONVENTIONS
 

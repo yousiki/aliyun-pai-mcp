@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-02-09 18:14:59  
-**Commit:** 96072b9  
+**Generated:** 2026-02-09 21:41:00  
+**Commit:** cfe1bd7  
 **Branch:** main
 
 ## OVERVIEW
@@ -15,8 +15,8 @@ aliyun-pai-mcp/
 │   ├── commands/          # CLI commands: init, server, doctor, dump-job-specs
 │   ├── mcp/
 │   │   ├── server.ts      # MCP server bootstrap, tool registration
-│   │   └── tools/         # MCP tool implementations (9 tools) → See tools/AGENTS.md
-│   ├── clients/           # API client factories: dlc, sts, workspace
+│   │   └── tools/         # MCP tool implementations (8 tools) → See tools/AGENTS.md
+│   ├── clients/           # API client factories: dlc, sts
 │   ├── config/            # Settings schema (Zod), loader, writer
 │   └── utils/             # Validation + sanitization
 ├── package.json
@@ -69,7 +69,7 @@ aliyun-pai-mcp/
 
 **Security**: All tool outputs sanitized via `sanitizeObject()` or `sanitizeSettings()` before returning to agents.
 
-**Tool registration**: Each tool file exports single `register*Tool(server, settings, ...clients)`. `codesource.ts` exception: registers 2 tools.
+**Tool registration**: Each tool file exports single `register*Tool(server, settings, ...clients)`.
 
 ## COMMANDS
 
