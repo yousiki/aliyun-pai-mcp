@@ -9,9 +9,10 @@ program.name("aliyun-pai-mcp").version("0.3.0").description("MCP server for Aliy
 program
   .command("init")
   .description("Initialize configuration")
-  .action(async () => {
+  .option("--force", "Skip reconfigure confirmation if settings exist")
+  .action(async (options: { force?: boolean }) => {
     const command = await import("./commands/init.js");
-    await command.default();
+    await command.default(options);
   });
 
 program

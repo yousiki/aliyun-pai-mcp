@@ -10,6 +10,7 @@ import pc from "picocolors";
 import { createDLCClient } from "../clients/dlc.js";
 import { createSTSClient, getCallerIdentity } from "../clients/sts.js";
 import { createWorkspaceClient } from "../clients/workspace.js";
+import { loadSettings } from "../config/loader.js";
 import type { Mount, MountAccess, Settings } from "../config/schema.js";
 import { writeSettings } from "../config/writer.js";
 
@@ -38,13 +39,45 @@ function requiredInput(label: string): (value: string | undefined) => string | u
   };
 }
 
-export default async function initCommand(): Promise<void> {
+async function tryLoadExistingSettings(): Promise<Settings | null> {
+  try {
+    const settings = await loadSettings();
+    p.note(
+      `${pc.bold("Region:")} ${settings.regionId}\n${pc.bold("Workspace:")} ${settings.workspaceId}\n${pc.bold("Project prefix:")} ${settings.projectPrefix}`,
+      "Existing settings found",
+    );
+    return settings;
+  } catch {
+    return null;
+  }
+}
+
+async function confirmReconfigure(): Promise<boolean> {
+  return ensureNotCancelled(
+    await p.confirm({
+      message: "Settings already exist. Do you want to reconfigure?",
+      initialValue: false,
+    }),
+  );
+}
+
+export default async function initCommand(options?: { force?: boolean }): Promise<void> {
   p.intro("aliyun-pai-mcp init");
+
+  const existingSettings = await tryLoadExistingSettings();
+
+  if (existingSettings && !options?.force) {
+    const shouldReconfigure = await confirmReconfigure();
+    if (!shouldReconfigure) {
+      p.outro("Settings unchanged.");
+      return;
+    }
+  }
 
   const regionId = ensureNotCancelled(
     await p.select({
       message: "Region ID",
-      initialValue: "cn-hangzhou",
+      initialValue: existingSettings?.regionId ?? "cn-hangzhou",
       options: [
         { value: "cn-hangzhou", label: "cn-hangzhou" },
         { value: "cn-shanghai", label: "cn-shanghai" },
@@ -64,8 +97,16 @@ export default async function initCommand(): Promise<void> {
     await p.select({
       message: "Credentials",
       options: [
-        { value: "input", label: "Enter AccessKey" },
-        { value: "env", label: "Use environment variables" },
+        ...(existingSettings
+          ? [
+              {
+                value: "keep" as const,
+                label: `Keep existing (${existingSettings.credentials.accessKeyId.slice(0, 8)}***)`,
+              },
+            ]
+          : []),
+        { value: "input" as const, label: "Enter AccessKey" },
+        { value: "env" as const, label: "Use environment variables" },
       ],
     }),
   );
@@ -73,7 +114,15 @@ export default async function initCommand(): Promise<void> {
   let accessKeyId: string;
   let accessKeySecret: string;
 
-  if (credentialMode === "input") {
+  if (credentialMode === "keep") {
+    accessKeyId = existingSettings!.credentials.accessKeyId;
+    accessKeySecret = existingSettings!.credentials.accessKeySecret;
+
+    p.note(
+      `Using existing credentials (AccessKey ID: ${accessKeyId.slice(0, 8)}***)`,
+      "Credentials",
+    );
+  } else if (credentialMode === "input") {
     accessKeyId = ensureNotCancelled(
       await p.text({
         message: "AccessKey ID",
@@ -102,37 +151,47 @@ export default async function initCommand(): Promise<void> {
     accessKeySecret = envKeySecret;
   }
 
-  const spinner = p.spinner();
-  spinner.start("Verifying credentials with STS...");
-
   let caller:
     | {
-        accountId: string;
-        userId: string;
-        identityType: string;
+        accountId?: string | null;
+        userId?: string | null;
+        identityType?: string | null;
       }
     | undefined;
 
-  try {
-    const stsClient = createSTSClient({ accessKeyId, accessKeySecret }, regionId);
-    const identity = await getCallerIdentity(stsClient);
-    caller = {
-      accountId: identity.accountId,
-      userId: identity.userId,
-      identityType: identity.identityType,
-    };
-    spinner.stop(pc.green("Credentials verified."));
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    spinner.stop(pc.red("Credential verification failed."));
-    p.cancel(`Unable to verify credentials: ${message}`);
-    process.exit(1);
-  }
+  if (credentialMode === "keep" && existingSettings?.caller) {
+    caller = existingSettings.caller;
+    if (caller) {
+      p.note(
+        `${pc.bold("Account:")} ${caller.accountId ?? "N/A"}\n${pc.bold("User:")} ${caller.userId ?? "N/A"}\n${pc.bold("Type:")} ${caller.identityType ?? "N/A"}`,
+        "Caller identity (cached)",
+      );
+    }
+  } else {
+    const spinner = p.spinner();
+    spinner.start("Verifying credentials with STS...");
 
-  p.note(
-    `${pc.bold("Account:")} ${caller.accountId}\n${pc.bold("User:")} ${caller.userId}\n${pc.bold("Type:")} ${caller.identityType}`,
-    "Caller identity",
-  );
+    try {
+      const stsClient = createSTSClient({ accessKeyId, accessKeySecret }, regionId);
+      const identity = await getCallerIdentity(stsClient);
+      caller = {
+        accountId: identity.accountId,
+        userId: identity.userId,
+        identityType: identity.identityType,
+      };
+      spinner.stop(pc.green("Credentials verified."));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      spinner.stop(pc.red("Credential verification failed."));
+      p.cancel(`Unable to verify credentials: ${message}`);
+      process.exit(1);
+    }
+
+    p.note(
+      `${pc.bold("Account:")} ${caller.accountId}\n${pc.bold("User:")} ${caller.userId}\n${pc.bold("Type:")} ${caller.identityType}`,
+      "Caller identity",
+    );
+  }
 
   const workspaceClient = createWorkspaceClient({ accessKeyId, accessKeySecret }, regionId);
 
@@ -144,7 +203,7 @@ export default async function initCommand(): Promise<void> {
       new ListWorkspacesRequest({ status: "ENABLED", verbose: true, pageSize: 100 }),
     );
     const workspaces = response.body?.workspaces ?? [];
-    const workspaceOptions = workspaces.flatMap((workspace) => {
+    let workspaceOptions = workspaces.flatMap((workspace) => {
       const id = workspace?.workspaceId?.trim();
       if (!id) {
         return [];
@@ -158,12 +217,28 @@ export default async function initCommand(): Promise<void> {
         },
       ];
     });
+
+    if (
+      existingSettings?.workspaceId &&
+      !workspaceOptions.some((opt) => opt.value === existingSettings.workspaceId)
+    ) {
+      workspaceOptions = [
+        {
+          value: existingSettings.workspaceId,
+          label: `Current: ${existingSettings.workspaceId}`,
+          hint: "May no longer be available",
+        },
+        ...workspaceOptions,
+      ];
+    }
+
     workspaceSpinner.stop(pc.green(`Found ${workspaceOptions.length} workspaces.`));
 
     if (workspaceOptions.length > 0) {
       const selectedWorkspace = ensureNotCancelled(
         await p.select({
           message: "Select workspace",
+          initialValue: existingSettings?.workspaceId,
           options: workspaceOptions,
         }),
       );
@@ -214,7 +289,7 @@ export default async function initCommand(): Promise<void> {
       }),
     );
     const resources = response.body?.resources ?? [];
-    const resourceOptions = resources.flatMap((resource) => {
+    let resourceOptions = resources.flatMap((resource) => {
       const id = resource?.id?.trim();
       if (!id) {
         return [];
@@ -228,12 +303,28 @@ export default async function initCommand(): Promise<void> {
         },
       ];
     });
+
+    if (
+      existingSettings?.resourceId &&
+      !resourceOptions.some((opt) => opt.value === existingSettings.resourceId)
+    ) {
+      resourceOptions = [
+        {
+          value: existingSettings.resourceId,
+          label: `Current: ${existingSettings.resourceId}`,
+          hint: "May no longer be available",
+        },
+        ...resourceOptions,
+      ];
+    }
+
     resourceSpinner.stop(pc.green(`Found ${resourceOptions.length} resources.`));
 
     if (resourceOptions.length > 0) {
       const selectedResource = ensureNotCancelled(
         await p.select({
           message: "Select resource (DLC cluster)",
+          initialValue: existingSettings?.resourceId,
           options: resourceOptions,
         }),
       );
@@ -275,6 +366,7 @@ export default async function initCommand(): Promise<void> {
     await p.text({
       message: "Project prefix",
       placeholder: "my-project",
+      initialValue: existingSettings?.projectPrefix,
       validate: requiredInput("Project prefix"),
     }),
   ).trim();
@@ -311,8 +403,20 @@ export default async function initCommand(): Promise<void> {
     const codeSourceSelection = ensureNotCancelled(
       await p.select({
         message: "CodeSource",
+        initialValue: existingSettings?.codeSource
+          ? `__keep__${existingSettings.codeSource.codeSourceId}`
+          : undefined,
         options: [
           { value: "__skip__", label: "Skip (configure later)" },
+          ...(existingSettings?.codeSource
+            ? [
+                {
+                  value: `__keep__${existingSettings.codeSource.codeSourceId}` as const,
+                  label: `Keep existing: ${existingSettings.codeSource.codeSourceId}`,
+                  hint: `Branch: ${existingSettings.codeSource.defaultBranch}`,
+                },
+              ]
+            : []),
           ...codeSourceItems.map((codeSource) => ({
             value: codeSource.id,
             label: codeSource.label,
@@ -323,21 +427,18 @@ export default async function initCommand(): Promise<void> {
     );
 
     if (codeSourceSelection !== "__skip__") {
-      const selectedCodeSource =
-        typeof codeSourceSelection === "string"
-          ? codeSourceItems.find((codeSource) => codeSource.id === codeSourceSelection)
-          : undefined;
-
-      if (!selectedCodeSource) {
-        p.log.warn("CodeSource selection was empty. Falling back to TODO.");
-      } else {
-        codeSourceId = selectedCodeSource.id;
-        codeSourceMountPath = selectedCodeSource.mountPath;
-        codeSourceDefaultBranch = selectedCodeSource.codeBranch;
+      if (
+        typeof codeSourceSelection === "string" &&
+        codeSourceSelection.startsWith("__keep__") &&
+        existingSettings?.codeSource
+      ) {
+        codeSourceId = existingSettings.codeSource.codeSourceId;
+        codeSourceMountPath = existingSettings.codeSource.mountPath;
+        codeSourceDefaultBranch = existingSettings.codeSource.defaultBranch;
 
         p.note(
           `${pc.bold("Mount path:")} ${codeSourceMountPath}\n${pc.bold("Default branch:")} ${codeSourceDefaultBranch}`,
-          "CodeSource defaults",
+          "CodeSource (kept from existing settings)",
         );
 
         codeSourceDefaultBranch = ensureNotCancelled(
@@ -347,6 +448,32 @@ export default async function initCommand(): Promise<void> {
             validate: requiredInput("Default branch"),
           }),
         ).trim();
+      } else {
+        const selectedCodeSource =
+          typeof codeSourceSelection === "string"
+            ? codeSourceItems.find((codeSource) => codeSource.id === codeSourceSelection)
+            : undefined;
+
+        if (!selectedCodeSource) {
+          p.log.warn("CodeSource selection was empty. Falling back to TODO.");
+        } else {
+          codeSourceId = selectedCodeSource.id;
+          codeSourceMountPath = selectedCodeSource.mountPath;
+          codeSourceDefaultBranch = selectedCodeSource.codeBranch;
+
+          p.note(
+            `${pc.bold("Mount path:")} ${codeSourceMountPath}\n${pc.bold("Default branch:")} ${codeSourceDefaultBranch}`,
+            "CodeSource defaults",
+          );
+
+          codeSourceDefaultBranch = ensureNotCancelled(
+            await p.text({
+              message: "Default branch",
+              initialValue: codeSourceDefaultBranch,
+              validate: requiredInput("Default branch"),
+            }),
+          ).trim();
+        }
       }
     }
   } catch (error: unknown) {
@@ -391,11 +518,29 @@ export default async function initCommand(): Promise<void> {
     }
   }
 
-  const mounts: Mount[] = [];
+  let mounts: Mount[] = [];
+
+  if (existingSettings?.mounts && existingSettings.mounts.length > 0) {
+    const keepExistingMounts = ensureNotCancelled(
+      await p.confirm({
+        message: `Keep ${existingSettings.mounts.length} existing mount(s)?`,
+        initialValue: true,
+      }),
+    );
+
+    if (keepExistingMounts) {
+      mounts = JSON.parse(JSON.stringify(existingSettings.mounts)) as Mount[];
+      p.note(
+        existingSettings.mounts.map((m) => `${m.name}: ${m.uri} -> ${m.mountPath}`).join("\n"),
+        "Existing mounts kept",
+      );
+    }
+  }
+
   while (true) {
     const addMount = ensureNotCancelled(
       await p.confirm({
-        message: "Add a mount?",
+        message: mounts.length === 0 ? "Add a mount?" : "Add another mount?",
         initialValue: false,
       }),
     );
@@ -453,6 +598,7 @@ export default async function initCommand(): Promise<void> {
   const jobType = ensureNotCancelled(
     await p.select({
       message: "Default job type",
+      initialValue: existingSettings?.jobDefaults.jobType,
       options: [
         { value: "PyTorchJob", label: "PyTorchJob" },
         { value: "TFJob", label: "TFJob" },
@@ -471,136 +617,164 @@ export default async function initCommand(): Promise<void> {
   };
 
   let copiedJobSpecs: Record<string, unknown>[] = [];
-  const copyFromJob = ensureNotCancelled(
-    await p.confirm({
-      message: "Copy jobSpecs from an existing DLC job?",
-      initialValue: true,
-    }),
-  );
 
-  if (copyFromJob) {
-    const dlcClient = createDLCClient({ accessKeyId, accessKeySecret }, regionId);
+  const hasExistingJobSpecs =
+    existingSettings?.jobDefaults.jobSpecs && existingSettings.jobDefaults.jobSpecs.length > 0;
 
-    try {
-      spinner.start("Fetching recent jobs...");
-      const listJobsResponse = await dlcClient.listJobs(
-        new ListJobsRequest({
-          workspaceId,
-          showOwn: true,
-          pageSize: 30,
-          sortBy: "GmtCreateTime",
-          order: "desc",
-        }),
+  if (hasExistingJobSpecs) {
+    const keepExistingJobSpecs = ensureNotCancelled(
+      await p.confirm({
+        message: `Keep ${existingSettings!.jobDefaults.jobSpecs.length} existing jobSpec(s)?`,
+        initialValue: true,
+      }),
+    );
+
+    if (keepExistingJobSpecs) {
+      copiedJobSpecs = existingSettings!.jobDefaults.jobSpecs.map((spec) =>
+        JSON.parse(JSON.stringify(spec)),
+      ) as Record<string, unknown>[];
+
+      const firstSpec = copiedJobSpecs[0];
+      p.note(
+        `Kept ${copiedJobSpecs.length} jobSpec(s)\nType: ${firstSpec?.type ?? "-"}, Image: ${firstSpec?.image ?? "-"}`,
+        "Job specs",
       );
+    }
+  }
 
-      const jobsWithSpecs = (listJobsResponse.body?.jobs ?? [])
-        .filter((job) => (job.jobSpecs?.length ?? 0) > 0)
-        .flatMap((job) => {
-          const jobId = job.jobId?.trim();
-          if (!jobId) {
-            return [];
-          }
+  if (copiedJobSpecs.length === 0) {
+    const copyFromJob = ensureNotCancelled(
+      await p.confirm({
+        message: "Copy jobSpecs from an existing DLC job?",
+        initialValue: true,
+      }),
+    );
 
-          return [{ ...job, jobId }];
-        });
-      spinner.stop(pc.green(`Found ${jobsWithSpecs.length} jobs with jobSpecs.`));
+    if (copyFromJob) {
+      const dlcClient = createDLCClient({ accessKeyId, accessKeySecret }, regionId);
+      const jobSpecSpinner = p.spinner();
 
-      if (jobsWithSpecs.length === 0) {
-        p.log.warn("No recent jobs with jobSpecs found.");
-        showEmptyJobSpecsNote();
-      } else {
-        const selectedJobId = ensureNotCancelled(
-          await p.select({
-            message: "Select a job to copy jobSpecs from",
-            options: [
-              { value: "__skip__", label: "Skip (leave jobSpecs empty)" },
-              ...jobsWithSpecs.map((job) => ({
-                value: job.jobId,
-                label: job.displayName ?? job.jobId,
-                hint: `${job.status ?? ""} · ${job.jobType ?? ""} · ${job.gmtCreateTime ?? ""}`,
-              })),
-            ],
+      try {
+        jobSpecSpinner.start("Fetching recent jobs...");
+        const listJobsResponse = await dlcClient.listJobs(
+          new ListJobsRequest({
+            workspaceId,
+            showOwn: true,
+            pageSize: 30,
+            sortBy: "GmtCreateTime",
+            order: "desc",
           }),
         );
 
-        if (selectedJobId === "__skip__") {
+        const jobsWithSpecs = (listJobsResponse.body?.jobs ?? [])
+          .filter((job) => (job.jobSpecs?.length ?? 0) > 0)
+          .flatMap((job) => {
+            const jobId = job.jobId?.trim();
+            if (!jobId) {
+              return [];
+            }
+
+            return [{ ...job, jobId }];
+          });
+        jobSpecSpinner.stop(pc.green(`Found ${jobsWithSpecs.length} jobs with jobSpecs.`));
+
+        if (jobsWithSpecs.length === 0) {
+          p.log.warn("No recent jobs with jobSpecs found.");
           showEmptyJobSpecsNote();
         } else {
-          spinner.start("Fetching job details...");
-          const jobResponse = await dlcClient.getJob(selectedJobId, new GetJobRequest({}));
-          spinner.stop(pc.green("Fetched job details."));
-
-          const jobBody = jobResponse.body;
-          const selectedJob = jobsWithSpecs.find((job) => job.jobId === selectedJobId);
-          const selectedJobName = selectedJob?.displayName ?? selectedJobId;
-
-          const jobSpecs = jobBody?.jobSpecs ?? [];
-          copiedJobSpecs = jobSpecs.map((spec) => JSON.parse(JSON.stringify(spec))) as Record<
-            string,
-            unknown
-          >[];
-
-          const firstSpec = copiedJobSpecs[0];
-          const firstSpecType = typeof firstSpec?.type === "string" ? firstSpec.type : "-";
-          const firstSpecImage = typeof firstSpec?.image === "string" ? firstSpec.image : "-";
-          const firstSpecPodCount =
-            typeof firstSpec?.podCount === "number" || typeof firstSpec?.podCount === "string"
-              ? String(firstSpec.podCount)
-              : "-";
-
-          p.note(
-            `Copied ${copiedJobSpecs.length} jobSpec(s) from "${selectedJobName}"\nType: ${firstSpecType}, Image: ${firstSpecImage}, podCount: ${firstSpecPodCount}`,
-            "Job specs",
+          const selectedJobId = ensureNotCancelled(
+            await p.select({
+              message: "Select a job to copy jobSpecs from",
+              options: [
+                { value: "__skip__", label: "Skip (leave jobSpecs empty)" },
+                ...jobsWithSpecs.map((job) => ({
+                  value: job.jobId,
+                  label: job.displayName ?? job.jobId,
+                  hint: `${job.status ?? ""} · ${job.jobType ?? ""} · ${job.gmtCreateTime ?? ""}`,
+                })),
+              ],
+            }),
           );
 
-          const jobDataSources =
-            jobBody?.dataSources?.flatMap((dataSource) => {
-              const uri = dataSource.uri?.trim();
-              const mountPath = dataSource.mountPath?.trim();
-              if (!uri || !mountPath) {
-                return [];
-              }
+          if (selectedJobId === "__skip__") {
+            showEmptyJobSpecsNote();
+          } else {
+            jobSpecSpinner.start("Fetching job details...");
+            const jobResponse = await dlcClient.getJob(selectedJobId, new GetJobRequest({}));
+            jobSpecSpinner.stop(pc.green("Fetched job details."));
 
-              return [{ uri, mountPath }];
-            }) ?? [];
+            const jobBody = jobResponse.body;
+            const selectedJob = jobsWithSpecs.find((job) => job.jobId === selectedJobId);
+            const selectedJobName = selectedJob?.displayName ?? selectedJobId;
 
-          if (jobDataSources.length > 0 && mounts.length === 0) {
-            const importDataSourcesAsMounts = ensureNotCancelled(
-              await p.confirm({
-                message: `Import ${jobDataSources.length} data source(s) as mounts?`,
-                initialValue: true,
-              }),
+            const jobSpecs = jobBody?.jobSpecs ?? [];
+            copiedJobSpecs = jobSpecs.map((spec) => JSON.parse(JSON.stringify(spec))) as Record<
+              string,
+              unknown
+            >[];
+
+            const firstSpec = copiedJobSpecs[0];
+            const firstSpecType = typeof firstSpec?.type === "string" ? firstSpec.type : "-";
+            const firstSpecImage = typeof firstSpec?.image === "string" ? firstSpec.image : "-";
+            const firstSpecPodCount =
+              typeof firstSpec?.podCount === "number" || typeof firstSpec?.podCount === "string"
+                ? String(firstSpec.podCount)
+                : "-";
+
+            p.note(
+              `Copied ${copiedJobSpecs.length} jobSpec(s) from "${selectedJobName}"\nType: ${firstSpecType}, Image: ${firstSpecImage}, podCount: ${firstSpecPodCount}`,
+              "Job specs",
             );
 
-            if (importDataSourcesAsMounts) {
-              const importedMounts: Mount[] = jobDataSources.map((dataSource, index) => ({
-                name: `ds-${index}`,
-                uri: dataSource.uri,
-                mountPath: dataSource.mountPath,
-                mountAccess: "ReadWrite" as MountAccess,
-              }));
+            const jobDataSources =
+              jobBody?.dataSources?.flatMap((dataSource) => {
+                const uri = dataSource.uri?.trim();
+                const mountPath = dataSource.mountPath?.trim();
+                if (!uri || !mountPath) {
+                  return [];
+                }
 
-              mounts.push(...importedMounts);
+                return [{ uri, mountPath }];
+              }) ?? [];
 
-              p.note(
-                importedMounts
-                  .map((mount) => `${mount.name}: ${mount.uri} -> ${mount.mountPath}`)
-                  .join("\n"),
-                "Imported mounts",
+            if (jobDataSources.length > 0 && mounts.length === 0) {
+              const importDataSourcesAsMounts = ensureNotCancelled(
+                await p.confirm({
+                  message: `Import ${jobDataSources.length} data source(s) as mounts?`,
+                  initialValue: true,
+                }),
               );
+
+              if (importDataSourcesAsMounts) {
+                const importedMounts: Mount[] = jobDataSources.map((dataSource, index) => ({
+                  name: `ds-${index}`,
+                  uri: dataSource.uri,
+                  mountPath: dataSource.mountPath,
+                  mountAccess: "ReadWrite" as MountAccess,
+                }));
+
+                mounts.push(...importedMounts);
+
+                p.note(
+                  importedMounts
+                    .map((mount) => `${mount.name}: ${mount.uri} -> ${mount.mountPath}`)
+                    .join("\n"),
+                  "Imported mounts",
+                );
+              }
             }
           }
         }
+      } catch (error: unknown) {
+        jobSpecSpinner.stop(pc.yellow("Failed to copy job specs from existing jobs."));
+        p.log.warn(
+          `Could not copy jobSpecs from existing jobs: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        showEmptyJobSpecsNote();
       }
-    } catch (error: unknown) {
-      spinner.stop(pc.yellow("Failed to copy job specs from existing jobs."));
-      p.log.warn(
-        `Could not copy jobSpecs from existing jobs: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    } else {
       showEmptyJobSpecsNote();
     }
-  } else {
-    showEmptyJobSpecsNote();
   }
 
   const settings: Settings = {
@@ -629,6 +803,57 @@ export default async function initCommand(): Promise<void> {
     },
     mounts,
   };
+
+  if (existingSettings) {
+    const changes: string[] = [];
+
+    if (regionId !== existingSettings.regionId) {
+      changes.push(`regionId: ${existingSettings.regionId} → ${regionId}`);
+    }
+    if (workspaceId !== existingSettings.workspaceId) {
+      changes.push(`workspaceId: ${existingSettings.workspaceId} → ${workspaceId}`);
+    }
+    if (resourceId !== existingSettings.resourceId) {
+      changes.push(`resourceId: ${existingSettings.resourceId} → ${resourceId}`);
+    }
+    if (projectPrefix !== existingSettings.projectPrefix) {
+      changes.push(`projectPrefix: ${existingSettings.projectPrefix} → ${projectPrefix}`);
+    }
+    if (
+      accessKeyId !== existingSettings.credentials.accessKeyId ||
+      accessKeySecret !== existingSettings.credentials.accessKeySecret
+    ) {
+      changes.push("credentials: updated");
+    }
+    if (jobType !== existingSettings.jobDefaults.jobType) {
+      changes.push(`jobType: ${existingSettings.jobDefaults.jobType} → ${jobType}`);
+    }
+    if (JSON.stringify(copiedJobSpecs) !== JSON.stringify(existingSettings.jobDefaults.jobSpecs)) {
+      changes.push(
+        `jobSpecs: ${existingSettings.jobDefaults.jobSpecs.length} → ${copiedJobSpecs.length} specs`,
+      );
+    }
+    if (JSON.stringify(mounts) !== JSON.stringify(existingSettings.mounts)) {
+      changes.push(`mounts: ${existingSettings.mounts.length} → ${mounts.length} mounts`);
+    }
+    if (
+      (!codeSourceId && existingSettings.codeSource) ||
+      (codeSourceId && !existingSettings.codeSource) ||
+      (codeSourceId &&
+        existingSettings.codeSource &&
+        codeSourceId !== existingSettings.codeSource.codeSourceId)
+    ) {
+      changes.push(
+        `codeSource: ${existingSettings.codeSource?.codeSourceId ?? "none"} → ${codeSourceId ?? "none"}`,
+      );
+    }
+
+    if (changes.length > 0) {
+      p.note(changes.join("\n"), "Changes summary");
+    } else {
+      p.note("No changes detected", "Summary");
+    }
+  }
 
   try {
     await writeSettings(settings);
