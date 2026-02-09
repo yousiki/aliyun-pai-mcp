@@ -8,7 +8,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
-import type { Settings } from "../../config/schema.js";
+import type { MountAccess, Settings } from "../../config/schema.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 import { generateDisplayName } from "../../utils/validate.js";
 
@@ -32,6 +32,15 @@ const jobSubmitInputSchema = {
 function toText(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
 }
+
+/**
+ * The DLC API uses "RO" for read-only mounts, not "ReadOnly".
+ * Map the human-readable settings values to what the API actually expects.
+ */
+const MOUNT_ACCESS_API_VALUES: Record<MountAccess, string> = {
+  ReadOnly: "RO",
+  ReadWrite: "ReadWrite",
+};
 
 function buildJobSpecs(settings: Settings): JobSpec[] {
   if (settings.jobDefaults.jobSpecs.length > 0) {
@@ -97,7 +106,7 @@ export function registerJobSubmitTool(
             new CreateJobRequestDataSources({
               uri: mount.uri,
               mountPath: mount.mountPath,
-              mountAccess: mount.mountAccess,
+              mountAccess: MOUNT_ACCESS_API_VALUES[mount.mountAccess],
               options: mount.options ?? undefined,
             }),
         ),
