@@ -5,7 +5,7 @@
 **Branch:** main
 
 ## OVERVIEW
-MCP server for Aliyun PAI-DLC distributed training. CLI tool + stdio MCP server enabling coding agents to submit, monitor, and manage DLC jobs. TypeScript/Bun runtime.
+MCP server for Aliyun PAI-DLC distributed training. CLI tool + stdio MCP server enabling coding agents to submit, monitor, and manage DLC jobs. TypeScript/Bun runtime. 14 MCP tools with dynamic configuration and profile support.
 
 ## STRUCTURE
 ```
@@ -15,9 +15,13 @@ aliyun-pai-mcp/
 │   ├── commands/          # CLI commands: init, server, doctor, dump-job-specs
 │   ├── mcp/
 │   │   ├── server.ts      # MCP server bootstrap, tool registration
-│   │   └── tools/         # MCP tool implementations (8 tools) → See tools/AGENTS.md
+│   │   └── tools/         # MCP tool implementations (14 tools) → See tools/AGENTS.md
 │   ├── clients/           # API client factories: dlc, sts
-│   ├── config/            # Settings schema (Zod), loader, writer
+│   ├── config/
+│   │   ├── store.ts       # ConfigStore class (mutable settings with validation)
+│   │   ├── schema.ts      # Zod schemas + ProfileSchema
+│   │   ├── loader.ts      # loadSettings()
+│   │   └── writer.ts      # writeSettings()
 │   └── utils/             # Validation + sanitization
 ├── package.json
 ├── tsconfig.json
@@ -34,6 +38,7 @@ aliyun-pai-mcp/
 | Add API client | `src/clients/` | Factory pattern: `create*Client(creds, region)` |
 | Job validation logic | `src/utils/validate.ts` | Ownership, status checks, name generation |
 | Credential redaction | `src/utils/sanitize.ts` | Security: redact before output |
+| ConfigStore operations | `src/config/store.ts` | Mutable settings with locked field enforcement |
 
 ## CONVENTIONS
 
@@ -69,7 +74,7 @@ aliyun-pai-mcp/
 
 **Security**: All tool outputs sanitized via `sanitizeObject()` or `sanitizeSettings()` before returning to agents.
 
-**Tool registration**: Each tool file exports single `register*Tool(server, settings, ...clients)`.
+**Tool registration**: Each tool file exports single `register*Tool(server, configStore, ...clients)`. Tools receive `ConfigStore` instance for dynamic config access.
 
 ## COMMANDS
 

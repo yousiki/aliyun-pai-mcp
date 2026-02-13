@@ -65,17 +65,16 @@ Once the server is running, agents have access to these tools:
 
 ### Configuration
 
-| Tool         | Description                                                                                                                  |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `pai_whoami` | Show current caller identity and workspace context                                                                           |
-| `pai_config` | Show full MCP settings (sanitized). Includes job defaults (image, GPU/CPU/memory, pod count), mounts, and code source config |
-
-### Code Source
-
-| Tool                    | Description                             |
-| ----------------------- | --------------------------------------- |
-| `pai_codesource_get`    | Show configured code source settings    |
-| `pai_codesource_update` | Update code source branch and/or commit |
+| Tool                         | Description                                                                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `pai_whoami`                 | Show current caller identity and workspace context                                                                           |
+| `pai_config`                 | Show full MCP settings (sanitized). Includes job defaults (image, GPU/CPU/memory, pod count), mounts, and code source config |
+| `pai_config_schema`          | Inspect configuration schema with field descriptions and types                                                               |
+| `pai_config_update`          | Update modifiable configuration fields at runtime                                                                            |
+| `pai_config_list_profiles`   | List all saved configuration profiles                                                                                        |
+| `pai_config_apply_profile`   | Apply a saved configuration profile by name                                                                                  |
+| `pai_config_create_profile`  | Create or update a named configuration profile                                                                               |
+| `pai_help`                   | Show comprehensive usage guide                                                                                               |
 
 ### Jobs
 
@@ -94,7 +93,7 @@ When an agent calls `pai_job_submit`, it only provides:
 
 - **`name`** — a short task name (e.g. `train`, `eval`). The prefix is added automatically: `{prefix}-{name}-{timestamp}`
 - **`command`** — the shell command to run
-- **`codeCommit`** (optional) — git commit to checkout
+- **`codeCommit`** (optional, deprecated) — git commit to checkout
 
 Everything else comes from settings:
 
@@ -103,18 +102,18 @@ Everything else comes from settings:
 - Code source (from `codeSource`, if configured)
 - Workspace, resource quota, job type
 
-Use `pai_config` to inspect the current configuration before submitting.
+Use `pai_config_schema` to understand available configuration, and `pai_config_apply_profile` or `pai_config_update` to adjust resources before submitting.
 
 ## Typical Agent Workflow
 
 ```
 1. Agent writes code locally → git commit && git push
-2. pai_codesource_update(commit=<HEAD>)        # point code source to latest commit
-3. pai_job_submit(name="train", command="...")  # submit training job
-4. pai_job_wait(jobId, target="Running")        # wait for job to start
-5. pai_job_logs(jobId)                          # check logs
-6. If error → fix code, repeat from step 1
-7. pai_job_wait(jobId, target="Terminal")        # wait for completion
+2. pai_config_schema                            # understand available configuration
+3. pai_config_apply_profile(name="debug")       # or pai_config_update(...) to set resources
+4. pai_job_submit(name="train", command="...")  # submit training job
+5. pai_job_wait(jobId, target="Running")        # wait for job to start
+6. pai_job_logs(jobId)                          # verify branch/commit in early output
+7. If error → fix code, push, resubmit. Iterate until success.
 ```
 
 ## Settings Reference
@@ -123,7 +122,7 @@ Settings file: `~/.config/aliyun-pai/settings.json`
 
 ```jsonc
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "projectPrefix": "yousiki",
   "regionId": "ap-southeast-1",
   "workspaceId": "123456",
@@ -176,5 +175,59 @@ Settings file: `~/.config/aliyun-pai/settings.json`
       "mountAccess": "ReadOnly",
     },
   ],
+
+  // Optional — named configuration profiles for quick switching
+  "profiles": {
+    "debug": {
+      "jobSpecs": [
+        {
+          "type": "Worker",
+          "image": "your-image:tag",
+          "podCount": 1,
+          "resourceConfig": {
+            "CPU": "8",
+            "GPU": "1",
+            "memory": "32Gi",
+            "sharedMemory": "32Gi",
+          },
+        },
+      ],
+      "maxRunningJobs": 1,
+    },
+    "train": {
+      "jobSpecs": [
+        {
+          "type": "Worker",
+          "image": "your-image:tag",
+          "podCount": 1,
+          "resourceConfig": {
+            "CPU": "32",
+            "GPU": "8",
+            "memory": "256Gi",
+            "sharedMemory": "256Gi",
+          },
+        },
+      ],
+      "maxRunningJobs": 2,
+    },
+  },
 }
 ```
+
+## Recommended OpenCode Configuration
+
+If using this MCP server with OpenCode, add these permission rules to your `oh-my-opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "external_directory": { "*": "deny" },
+    "pai_config_update": "ask",
+    "pai_config_apply_profile": "ask",
+    "pai_config_create_profile": "ask"
+  }
+}
+```
+
+This prevents agents from reading credential files and requires user approval for config changes.

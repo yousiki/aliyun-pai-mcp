@@ -1,20 +1,23 @@
 # MCP TOOLS MODULE
 
 ## OVERVIEW
-MCP tool implementations for Aliyun PAI-DLC operations. 9 TypeScript files registering 9 MCP tools.
+MCP tool implementations for Aliyun PAI-DLC operations. 14 TypeScript files registering 14 MCP tools.
 
 ## STRUCTURE
 ```
 tools/
-├── job-submit.ts      # pai_job_submit
-├── job-list.ts        # pai_job_list
-├── job-get.ts         # pai_job_get
-├── job-stop.ts        # pai_job_stop
-├── job-wait.ts        # pai_job_wait
-├── job-logs.ts        # pai_job_logs
-├── config.ts          # pai_config
-├── whoami.ts          # pai_whoami
-└── codesource.ts      # pai_codesource_get
+├── job-submit.ts         # pai_job_submit
+├── job-list.ts           # pai_job_list
+├── job-get.ts            # pai_job_get
+├── job-stop.ts           # pai_job_stop
+├── job-wait.ts           # pai_job_wait
+├── job-logs.ts           # pai_job_logs
+├── config.ts             # pai_config
+├── config-schema.ts      # pai_config_schema
+├── config-update.ts      # pai_config_update
+├── config-profiles.ts    # pai_config_list_profiles, pai_config_apply_profile, pai_config_create_profile
+├── whoami.ts             # pai_whoami
+└── help.ts               # pai_help
 ```
 
 ## WHERE TO LOOK
@@ -28,8 +31,13 @@ tools/
 | Poll job status | job-wait.ts | `registerJobWaitTool()` |
 | Get logs | job-logs.ts | `registerJobLogsTool()` |
 | Show config | config.ts | `registerConfigTool()` |
+| Inspect config schema | config-schema.ts | `registerConfigSchemaTool()` |
+| Update config | config-update.ts | `registerConfigUpdateTool()` |
+| List profiles | config-profiles.ts | `registerConfigProfileTools()` |
+| Apply profile | config-profiles.ts | `registerConfigProfileTools()` |
+| Create profile | config-profiles.ts | `registerConfigProfileTools()` |
 | Show identity | whoami.ts | `registerWhoamiTool()` |
-| Get code source info | codesource.ts | `registerCodeSourceTools()` |
+| Show help | help.ts | `registerHelpTool()` |
 
 ## CONVENTIONS
 
@@ -37,11 +45,11 @@ tools/
 
 **MCP tool naming**: `pai_{domain}_{action}` snake_case with `pai_` prefix.
 
-**Export pattern**: Each file exports ONE function `register*Tool(server, settings, ...clients)`.
+**Export pattern**: Each file exports ONE function `register*Tool(server, configStore, ...clients)`.
 
 **Registration location**: All tools imported and registered in `../server.ts`.
 
-**Dependency injection**: Tools receive dependencies as parameters, never import clients/settings directly.
+**Dependency injection**: Tools receive `configStore: ConfigStore` instead of `settings: Settings`. Call `configStore.get()` to access current settings. Never import clients/settings directly.
 
 **Input schema**: Zod schemas defined as `{tool}InputSchema` constants where needed.
 
