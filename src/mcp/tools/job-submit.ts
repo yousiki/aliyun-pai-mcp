@@ -28,14 +28,21 @@ const jobSubmitInputSchema = {
     .string()
     .min(1)
     .optional()
-    .describe("Git branch to checkout. Uses default branch from settings if omitted."),
+    .describe(
+      "Git branch for code source. This is the primary way to control which code version runs. " +
+        "The job pulls the latest commit on this branch at start time. " +
+        "WARNING: Branch switching via Aliyun PAI API may occasionally be unreliable. " +
+        "Always verify the actual branch/commit in job logs after submission.",
+    ),
   codeCommit: z
     .string()
     .min(1)
     .optional()
     .describe(
-      "Git commit hash to checkout. If omitted, the latest commit on the branch is used. " +
-        "Always specify this after 'git push' to ensure the job uses the exact code you pushed.",
+      "[DEPRECATED — Aliyun API has known bugs with commit pinning. Use codeBranch instead. " +
+        "The job will always use the latest commit on the specified branch.] " +
+        "Git commit hash to checkout. If specified, behavior is unreliable — " +
+        "prefer pushing to branch and omitting this parameter.",
     ),
 } as unknown as ZodRawShapeCompat;
 

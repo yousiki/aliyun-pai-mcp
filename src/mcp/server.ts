@@ -4,8 +4,11 @@ import { createDLCClient } from "../clients/dlc.js";
 import { createSTSClient, getCallerIdentity } from "../clients/sts.js";
 import { loadSettings } from "../config/loader.js";
 import { ConfigStore } from "../config/store.js";
-import { registerCodeSourceTools } from "./tools/codesource.js";
 import { registerConfigTool } from "./tools/config.js";
+import { registerConfigProfileTools } from "./tools/config-profiles.js";
+import { registerConfigSchemaTool } from "./tools/config-schema.js";
+import { registerConfigUpdateTool } from "./tools/config-update.js";
+import { registerHelpTool } from "./tools/help.js";
 import { registerJobGetTool } from "./tools/job-get.js";
 import { registerJobListTool } from "./tools/job-list.js";
 import { registerJobLogsTool } from "./tools/job-logs.js";
@@ -24,11 +27,39 @@ export async function startServer(): Promise<void> {
 
   const configStore = new ConfigStore(settings);
 
-  const server = new McpServer({ name: "aliyun-pai-mcp", version: "0.3.0" });
+  const server = new McpServer(
+    { name: "aliyun-pai-mcp", version: "0.3.0" },
+    {
+      instructions: `
+You are connected to Aliyun PAI-DLC via this MCP server.
 
+WORKFLOW:
+1. Write/modify code locally, then git commit && git push
+2. Use pai_config_schema to understand available configuration
+3. Use pai_config_apply_profile or pai_config_update to set appropriate resources
+   (e.g., "debug" profile for 1-GPU quick tests, "train" profile for full training)
+4. Call pai_job_submit with a name and command. Code is pulled from the configured branch automatically.
+5. Use pai_job_wait + pai_job_logs to monitor. Verify the correct branch/commit in early log output.
+6. If errors: fix code locally, push, resubmit. Iterate until success.
+
+RULES:
+- ALL cluster interaction MUST go through pai_* tools. No exceptions.
+- NEVER call Aliyun APIs directly via curl, SDK, or CLI.
+- NEVER read or search for credential files on the filesystem.
+- NEVER run commands to inspect environment variables for secrets.
+- Branch switching via Aliyun PAI may occasionally be unreliable. Always verify in logs.
+
+Use pai_help for detailed usage guide.
+      `.trim(),
+    },
+  );
+
+  registerHelpTool(server, configStore);
   registerWhoamiTool(server, configStore, stsClient, callerIdentity);
   registerConfigTool(server, configStore);
-  registerCodeSourceTools(server, configStore);
+  registerConfigSchemaTool(server, configStore);
+  registerConfigUpdateTool(server, configStore);
+  registerConfigProfileTools(server, configStore);
   registerJobListTool(server, configStore, dlcClient);
   registerJobGetTool(server, configStore, dlcClient, callerIdentity);
   registerJobSubmitTool(server, configStore, dlcClient);
