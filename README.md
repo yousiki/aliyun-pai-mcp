@@ -68,7 +68,7 @@ Once the server is running, agents have access to these tools:
 | Tool                         | Description                                                                                                                  |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `pai_whoami`                 | Show current caller identity and workspace context                                                                           |
-| `pai_config`                 | Show full MCP settings (sanitized). Includes job defaults (image, GPU/CPU/memory, pod count), mounts, and code source config |
+| `pai_config`                 | Show full MCP settings (sanitized). Includes default job settings (image, GPU/CPU/memory, pod count), mounts, and code source config |
 | `pai_config_schema`          | Inspect configuration schema with field descriptions and types                                                               |
 | `pai_config_update`          | Update modifiable configuration fields at runtime                                                                            |
 | `pai_config_list_profiles`   | List all saved configuration profiles                                                                                        |
@@ -97,7 +97,7 @@ When an agent calls `pai_job_submit`, it only provides:
 
 Everything else comes from settings:
 
-- Docker image, GPU/CPU/memory, pod count (from `jobDefaults.jobSpecs`)
+- Docker image, GPU/CPU/memory, pod count (from `jobSpecs`)
 - Data source mounts (from `mounts`)
 - Code source (from `codeSource`, if configured)
 - Workspace, resource quota, job type
@@ -148,24 +148,21 @@ Settings file: `~/.config/aliyun-pai/settings.json`
     "defaultCommit": null,
   },
 
-  "jobDefaults": {
-    "jobType": "PyTorchJob",
-    "displayNamePrefix": "yousiki",
-    // Copied from a past job during init, or via dump-job-specs
-    "jobSpecs": [
-      {
-        "type": "Worker",
-        "image": "your-image:tag",
-        "podCount": 1,
-        "resourceConfig": {
-          "CPU": "8",
-          "GPU": "1",
-          "memory": "32Gi",
-          "sharedMemory": "32Gi",
-        },
+  "jobType": "PyTorchJob",
+  // Copied from a past job during init, or via dump-job-specs
+  "jobSpecs": [
+    {
+      "type": "Worker",
+      "image": "your-image:tag",
+      "podCount": 1,
+      "resourceConfig": {
+        "CPU": "8",
+        "GPU": "1",
+        "memory": "32Gi",
+        "sharedMemory": "32Gi",
       },
-    ],
-  },
+    },
+  ],
 
   "mounts": [
     {

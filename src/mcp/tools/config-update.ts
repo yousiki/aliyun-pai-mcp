@@ -10,7 +10,7 @@ const configUpdateInputSchema = {
     .record(z.string(), z.unknown())
     .describe(
       "Map of field paths to new values. Supports dot-notation with array indices. " +
-        'Example: { "jobDefaults.jobSpecs[0].resourceConfig.GPU": "8", "maxRunningJobs": 2 }. ' +
+        'Example: { "jobSpecs[0].resourceConfig.GPU": "8", "maxRunningJobs": 2 }. ' +
         "Use pai_config_schema to see available fields and current values.",
     ),
 } as unknown as ZodRawShapeCompat;

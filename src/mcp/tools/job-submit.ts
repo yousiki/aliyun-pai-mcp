@@ -60,25 +60,11 @@ const MOUNT_ACCESS_API_VALUES: Record<MountAccess, string> = {
 };
 
 function buildJobSpecs(settings: Settings): JobSpec[] {
-  if (settings.jobDefaults.jobSpecs.length > 0) {
-    return settings.jobDefaults.jobSpecs.map((rawSpec) => new JobSpec(rawSpec));
+  if (settings.jobSpecs.length === 0) {
+    throw new Error("jobSpecs is empty: configure via pai_config_update or profiles.");
   }
 
-  const simple = settings.jobDefaults.simple;
-  if (!simple) {
-    throw new Error(
-      "Job spec defaults are missing: provide jobDefaults.jobSpecs or jobDefaults.simple.",
-    );
-  }
-
-  return [
-    new JobSpec({
-      type: "Worker",
-      image: simple.dockerImage,
-      ecsSpec: simple.ecsSpec,
-      podCount: simple.podCount,
-    }),
-  ];
+  return settings.jobSpecs.map((rawSpec) => new JobSpec(rawSpec));
 }
 
 export function registerJobSubmitTool(
@@ -143,7 +129,7 @@ export function registerJobSubmitTool(
         workspaceId: settings.workspaceId,
         resourceId: settings.resourceId,
         displayName,
-        jobType: settings.jobDefaults.jobType,
+        jobType: settings.jobType,
         jobSpecs: buildJobSpecs(settings),
         userCommand: args.command,
         codeSource: settings.codeSource

@@ -43,46 +43,43 @@ function buildSchema(settings: Record<string, unknown>): FieldGroup[] {
     description: "GPU, CPU, memory, and shared memory allocated to each worker pod.",
     fields: [
       {
-        path: "jobDefaults.jobSpecs[0].resourceConfig.GPU",
+        path: "jobSpecs[0].resourceConfig.GPU",
         type: "string",
         description:
           "Number of GPUs per worker pod (string, e.g. '1', '4', '8'). " +
           "Must match available GPU counts on the selected resource quota.",
         constraints: { examples: ["1", "2", "4", "8"] },
-        currentValue: getNestedValue(settings, "jobDefaults.jobSpecs.0.resourceConfig.GPU"),
+        currentValue: getNestedValue(settings, "jobSpecs.0.resourceConfig.GPU"),
         modifiable: true,
       },
       {
-        path: "jobDefaults.jobSpecs[0].resourceConfig.CPU",
+        path: "jobSpecs[0].resourceConfig.CPU",
         type: "string",
         description:
           "Number of CPU cores per worker pod (string, e.g. '8', '16'). " +
           "Must be compatible with the selected GPU configuration.",
         constraints: { examples: ["4", "8", "12", "16", "32"] },
-        currentValue: getNestedValue(settings, "jobDefaults.jobSpecs.0.resourceConfig.CPU"),
+        currentValue: getNestedValue(settings, "jobSpecs.0.resourceConfig.CPU"),
         modifiable: true,
       },
       {
-        path: "jobDefaults.jobSpecs[0].resourceConfig.memory",
+        path: "jobSpecs[0].resourceConfig.memory",
         type: "string",
         description:
           "Main memory per worker pod (string with unit, e.g. '32Gi', '64Gi'). " +
           "Kubernetes format: Gi = gibibytes.",
         constraints: { format: "<number>Gi", examples: ["16Gi", "32Gi", "64Gi", "128Gi"] },
-        currentValue: getNestedValue(settings, "jobDefaults.jobSpecs.0.resourceConfig.memory"),
+        currentValue: getNestedValue(settings, "jobSpecs.0.resourceConfig.memory"),
         modifiable: true,
       },
       {
-        path: "jobDefaults.jobSpecs[0].resourceConfig.sharedMemory",
+        path: "jobSpecs[0].resourceConfig.sharedMemory",
         type: "string",
         description:
           "Shared memory (/dev/shm) per worker pod (string with unit, e.g. '32Gi'). " +
           "Important for PyTorch DataLoader with num_workers > 0.",
         constraints: { format: "<number>Gi", examples: ["16Gi", "32Gi", "64Gi"] },
-        currentValue: getNestedValue(
-          settings,
-          "jobDefaults.jobSpecs.0.resourceConfig.sharedMemory",
-        ),
+        currentValue: getNestedValue(settings, "jobSpecs.0.resourceConfig.sharedMemory"),
         modifiable: true,
       },
     ],
@@ -94,13 +91,13 @@ function buildSchema(settings: Record<string, unknown>): FieldGroup[] {
     description: "Container image used for job workers.",
     fields: [
       {
-        path: "jobDefaults.jobSpecs[0].image",
+        path: "jobSpecs[0].image",
         type: "string",
         description:
           "Full docker image URI (e.g. 'registry.cn-hangzhou.aliyuncs.com/org/image:tag'). " +
           "Must be accessible from the PAI-DLC cluster.",
         constraints: { format: "registry/repository:tag" },
-        currentValue: getNestedValue(settings, "jobDefaults.jobSpecs.0.image"),
+        currentValue: getNestedValue(settings, "jobSpecs.0.image"),
         modifiable: true,
       },
     ],
@@ -112,13 +109,13 @@ function buildSchema(settings: Record<string, unknown>): FieldGroup[] {
     description: "DLC distributed training framework type.",
     fields: [
       {
-        path: "jobDefaults.jobType",
+        path: "jobType",
         type: "string",
         description:
           "Distributed training framework. Determines how workers communicate " +
           "and how the job is orchestrated by PAI-DLC.",
         constraints: { enum: ["PyTorchJob", "TFJob", "MPIJob", "XGBoostJob", "RayJob"] },
-        currentValue: getNestedValue(settings, "jobDefaults.jobType"),
+        currentValue: getNestedValue(settings, "jobType"),
         modifiable: true,
       },
     ],
@@ -130,13 +127,13 @@ function buildSchema(settings: Record<string, unknown>): FieldGroup[] {
     description: "Number of worker pods for distributed training.",
     fields: [
       {
-        path: "jobDefaults.jobSpecs[0].podCount",
+        path: "jobSpecs[0].podCount",
         type: "number",
         description:
           "Number of worker pods to launch. For single-GPU jobs use 1. " +
           "For distributed training, set to the number of nodes.",
         constraints: { min: 1 },
-        currentValue: getNestedValue(settings, "jobDefaults.jobSpecs.0.podCount"),
+        currentValue: getNestedValue(settings, "jobSpecs.0.podCount"),
         modifiable: true,
       },
     ],

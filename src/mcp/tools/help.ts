@@ -35,8 +35,8 @@ d) Apply a profile:
 
 e) Or update specific fields:
    pai_config_update(updates={
-     "jobDefaults.jobSpecs[0].resourceConfig.GPU": "4",
-     "jobDefaults.jobSpecs[0].resourceConfig.memory": "64Gi"
+     "jobSpecs[0].resourceConfig.GPU": "4",
+     "jobSpecs[0].resourceConfig.memory": "64Gi"
    })
    → Use JSON path notation for nested fields
    → Changes persist until next update or profile application
@@ -92,7 +92,7 @@ If resource issues (OOM, quota exceeded):
 
 - pai_config
   Show full MCP settings (sanitized, credentials redacted)
-  Includes job defaults (image, GPU/CPU/memory, pod count), mounts, code source config
+  Includes default job settings (image, GPU/CPU/memory, pod count), mounts, code source config
   Use to inspect current configuration before job submission
 
 - pai_config_schema
@@ -101,7 +101,7 @@ If resource issues (OOM, quota exceeded):
 
 - pai_config_update
   Modify specific configuration fields using JSON path notation
-  Example: pai_config_update(updates={"jobDefaults.jobSpecs[0].resourceConfig.GPU": "8"})
+  Example: pai_config_update(updates={"jobSpecs[0].resourceConfig.GPU": "8"})
   Changes persist until next update or profile application
 
 - pai_config_list_profiles
@@ -301,7 +301,7 @@ Solution:
 2. Check branch in logs: pai_job_logs(jobId)
 3. If wrong branch: update config and resubmit
 4. If dependencies missing: update Docker image in config
-   pai_config_update(updates={"jobDefaults.jobSpecs[0].image": "new-image:tag"})
+   pai_config_update(updates={"jobSpecs[0].image": "new-image:tag"})
 
 ### Job Fails Immediately
 Cause: Command error, missing files, or resource issues

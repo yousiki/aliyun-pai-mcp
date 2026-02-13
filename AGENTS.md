@@ -58,7 +58,7 @@ aliyun-pai-mcp/
 
 **Naming**:
 - Files: kebab-case (`job-submit.ts`)
-- Types: PascalCase (`Settings`, `JobDefaults`)
+- Types: PascalCase (`Settings`, `JobSpec`)
 - Functions: camelCase (`loadSettings`, `validateJobOwnership`)
 - MCP tools: `pai_` prefix + snake_case (`pai_job_submit`)
 
@@ -69,6 +69,8 @@ aliyun-pai-mcp/
 ## UNIQUE STYLES
 
 **Settings location**: `~/.config/aliyun-pai/settings.json` (not project root, not `.env`).
+
+**Settings shape**: `jobType` and `jobSpecs` are top-level fields (no `jobDefaults` wrapper).
 
 **Architecture**: Layered DI pattern — config → clients → tools. Settings loaded once, passed down.
 

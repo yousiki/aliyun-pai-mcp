@@ -14,7 +14,7 @@ import { loadSettings } from "../config/loader.js";
 import type { Mount, MountAccess, Settings } from "../config/schema.js";
 import { writeSettings } from "../config/writer.js";
 
-const SETTINGS_VERSION = "0.3.0";
+const SETTINGS_VERSION = "0.4.0";
 
 function ensureNotCancelled<T>(value: T | symbol): T {
   if (p.isCancel(value)) {
@@ -598,7 +598,7 @@ export default async function initCommand(options?: { force?: boolean }): Promis
   const jobType = ensureNotCancelled(
     await p.select({
       message: "Default job type",
-      initialValue: existingSettings?.jobDefaults.jobType,
+      initialValue: existingSettings?.jobType,
       options: [
         { value: "PyTorchJob", label: "PyTorchJob" },
         { value: "TFJob", label: "TFJob" },
@@ -611,26 +611,25 @@ export default async function initCommand(options?: { force?: boolean }): Promis
 
   const showEmptyJobSpecsNote = (): void => {
     p.note(
-      "jobDefaults.jobSpecs is initialized as an empty array. Use 'aliyun-pai-mcp dump-job-specs <jobId>' to copy specs into settings.",
+      "jobSpecs is initialized as an empty array. Use 'aliyun-pai-mcp dump-job-specs <jobId>' to copy specs into settings.",
       "Job specs",
     );
   };
 
   let copiedJobSpecs: Record<string, unknown>[] = [];
 
-  const hasExistingJobSpecs =
-    existingSettings?.jobDefaults.jobSpecs && existingSettings.jobDefaults.jobSpecs.length > 0;
+  const hasExistingJobSpecs = existingSettings?.jobSpecs && existingSettings.jobSpecs.length > 0;
 
   if (hasExistingJobSpecs) {
     const keepExistingJobSpecs = ensureNotCancelled(
       await p.confirm({
-        message: `Keep ${existingSettings!.jobDefaults.jobSpecs.length} existing jobSpec(s)?`,
+        message: `Keep ${existingSettings!.jobSpecs.length} existing jobSpec(s)?`,
         initialValue: true,
       }),
     );
 
     if (keepExistingJobSpecs) {
-      copiedJobSpecs = existingSettings!.jobDefaults.jobSpecs.map((spec) =>
+      copiedJobSpecs = existingSettings!.jobSpecs.map((spec) =>
         JSON.parse(JSON.stringify(spec)),
       ) as Record<string, unknown>[];
 
@@ -796,11 +795,8 @@ export default async function initCommand(options?: { force?: boolean }): Promis
           defaultCommit: null,
         }
       : undefined,
-    jobDefaults: {
-      jobType,
-      displayNamePrefix: projectPrefix,
-      jobSpecs: copiedJobSpecs,
-    },
+    jobType,
+    jobSpecs: copiedJobSpecs,
     mounts,
   };
 
@@ -825,12 +821,12 @@ export default async function initCommand(options?: { force?: boolean }): Promis
     ) {
       changes.push("credentials: updated");
     }
-    if (jobType !== existingSettings.jobDefaults.jobType) {
-      changes.push(`jobType: ${existingSettings.jobDefaults.jobType} → ${jobType}`);
+    if (jobType !== existingSettings.jobType) {
+      changes.push(`jobType: ${existingSettings.jobType} → ${jobType}`);
     }
-    if (JSON.stringify(copiedJobSpecs) !== JSON.stringify(existingSettings.jobDefaults.jobSpecs)) {
+    if (JSON.stringify(copiedJobSpecs) !== JSON.stringify(existingSettings.jobSpecs)) {
       changes.push(
-        `jobSpecs: ${existingSettings.jobDefaults.jobSpecs.length} → ${copiedJobSpecs.length} specs`,
+        `jobSpecs: ${existingSettings.jobSpecs.length} → ${copiedJobSpecs.length} specs`,
       );
     }
     if (JSON.stringify(mounts) !== JSON.stringify(existingSettings.mounts)) {

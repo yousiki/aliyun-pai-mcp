@@ -126,11 +126,11 @@ export function registerConfigProfileTools(server: McpServer, configStore: Confi
           const settings = configStore.get();
           const base: Record<string, unknown> = {};
 
-          if (settings.jobDefaults?.jobSpecs !== undefined) {
-            base.jobSpecs = settings.jobDefaults.jobSpecs;
+          if (settings.jobSpecs !== undefined) {
+            base.jobSpecs = settings.jobSpecs;
           }
-          if (settings.jobDefaults?.jobType !== undefined) {
-            base.jobType = settings.jobDefaults.jobType;
+          if (settings.jobType !== undefined) {
+            base.jobType = settings.jobType;
           }
           if (settings.mounts !== undefined) {
             base.mounts = settings.mounts;

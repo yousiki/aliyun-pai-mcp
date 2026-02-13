@@ -25,27 +25,9 @@ export const CodeSourceSchema = z.object({
 
 export type CodeSource = z.infer<typeof CodeSourceSchema>;
 
-export const JobSimpleDefaultsSchema = z.object({
-  dockerImage: z.string().min(1),
-  ecsSpec: z.string().min(1),
-  podCount: z.number().int().positive(),
-});
-
-export type JobSimpleDefaults = z.infer<typeof JobSimpleDefaultsSchema>;
-
 export const JobSpecSchema = z.record(z.string(), z.unknown());
 
 export type JobSpec = z.infer<typeof JobSpecSchema>;
-
-export const JobDefaultsSchema = z.object({
-  jobType: z.string().min(1),
-  displayNamePrefix: z.string().min(1),
-  jobSpecs: z.array(JobSpecSchema),
-  simple: JobSimpleDefaultsSchema.optional(),
-  allowedNodes: z.array(z.string().min(1)).optional(),
-});
-
-export type JobDefaults = z.infer<typeof JobDefaultsSchema>;
 
 export const MountAccessSchema = z.enum(["ReadOnly", "ReadWrite"]);
 
@@ -90,7 +72,8 @@ export const SettingsSchema = z.object({
   credentials: CredentialsSchema,
   caller: CallerSchema.optional(),
   codeSource: CodeSourceSchema.optional(),
-  jobDefaults: JobDefaultsSchema,
+  jobType: z.string().min(1),
+  jobSpecs: z.array(JobSpecSchema),
   mounts: z.array(MountSchema),
   maxRunningJobs: z.number().int().positive().optional(),
   profiles: z.record(ProfileNameSchema, ProfileSchema).optional(),

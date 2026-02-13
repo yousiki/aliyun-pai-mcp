@@ -34,7 +34,7 @@ export default async function dumpJobSpecsCommand(jobId: string): Promise<void> 
     console.log(pc.bold(pc.cyan("Job details (selected fields)")));
     console.log(JSON.stringify(extracted, null, 2));
     console.log("");
-    console.log(pc.bold(pc.cyan("Paste-ready jobDefaults.jobSpecs")));
+    console.log(pc.bold(pc.cyan("Paste-ready jobSpecs")));
     console.log(JSON.stringify(body.jobSpecs ?? [], null, 2));
   } catch (error: unknown) {
     console.log(`${pc.red("x")} ${pc.bold("Failed to dump job specs")}`);

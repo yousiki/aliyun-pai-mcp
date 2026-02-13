@@ -324,17 +324,11 @@ export class ConfigStore {
     const changes: Partial<Settings> = {};
 
     if (profile.jobSpecs !== undefined) {
-      changes.jobDefaults = {
-        ...deepClone(this.settings.jobDefaults),
-        jobSpecs: profile.jobSpecs,
-      };
+      changes.jobSpecs = profile.jobSpecs;
     }
 
     if (profile.jobType !== undefined) {
-      changes.jobDefaults = {
-        ...(changes.jobDefaults ?? deepClone(this.settings.jobDefaults)),
-        jobType: profile.jobType,
-      };
+      changes.jobType = profile.jobType;
     }
 
     if (profile.mounts !== undefined) {
