@@ -4,7 +4,7 @@ import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-com
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
 import type { CallerIdentity } from "../../clients/sts.js";
-import type { Settings } from "../../config/schema.js";
+import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 
 const jobGetInputSchema = {
@@ -17,7 +17,7 @@ function toText(payload: unknown): string {
 
 export function registerJobGetTool(
   server: McpServer,
-  _settings: Settings,
+  _configStore: ConfigStore,
   dlcClient: DlcClientApi,
   callerIdentity: CallerIdentity,
 ): void {

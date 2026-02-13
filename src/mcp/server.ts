@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createDLCClient } from "../clients/dlc.js";
 import { createSTSClient, getCallerIdentity } from "../clients/sts.js";
 import { loadSettings } from "../config/loader.js";
+import { ConfigStore } from "../config/store.js";
 import { registerCodeSourceTools } from "./tools/codesource.js";
 import { registerConfigTool } from "./tools/config.js";
 import { registerJobGetTool } from "./tools/job-get.js";
@@ -21,17 +22,19 @@ export async function startServer(): Promise<void> {
 
   const callerIdentity = await getCallerIdentity(stsClient);
 
+  const configStore = new ConfigStore(settings);
+
   const server = new McpServer({ name: "aliyun-pai-mcp", version: "0.3.0" });
 
-  registerWhoamiTool(server, settings, stsClient, callerIdentity);
-  registerConfigTool(server, settings);
-  registerCodeSourceTools(server, settings);
-  registerJobListTool(server, settings, dlcClient);
-  registerJobGetTool(server, settings, dlcClient, callerIdentity);
-  registerJobSubmitTool(server, settings, dlcClient);
-  registerJobStopTool(server, settings, dlcClient, callerIdentity);
-  registerJobLogsTool(server, settings, dlcClient, callerIdentity);
-  registerJobWaitTool(server, settings, dlcClient, callerIdentity);
+  registerWhoamiTool(server, configStore, stsClient, callerIdentity);
+  registerConfigTool(server, configStore);
+  registerCodeSourceTools(server, configStore);
+  registerJobListTool(server, configStore, dlcClient);
+  registerJobGetTool(server, configStore, dlcClient, callerIdentity);
+  registerJobSubmitTool(server, configStore, dlcClient);
+  registerJobStopTool(server, configStore, dlcClient, callerIdentity);
+  registerJobLogsTool(server, configStore, dlcClient, callerIdentity);
+  registerJobWaitTool(server, configStore, dlcClient, callerIdentity);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

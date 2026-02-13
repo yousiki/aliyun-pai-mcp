@@ -10,6 +10,7 @@ import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-com
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
 import type { MountAccess, Settings } from "../../config/schema.js";
+import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 import { generateDisplayName, isActiveStatus } from "../../utils/validate.js";
 
@@ -75,7 +76,7 @@ function buildJobSpecs(settings: Settings): JobSpec[] {
 
 export function registerJobSubmitTool(
   server: McpServer,
-  settings: Settings,
+  configStore: ConfigStore,
   dlcClient: DlcClientApi,
 ): void {
   server.registerTool(
@@ -96,6 +97,7 @@ export function registerJobSubmitTool(
       },
     },
     async (args, _extra) => {
+      const settings = configStore.get();
       const maxRunning = settings.maxRunningJobs ?? 1;
       const listResponse = await dlcClient.listJobs(
         new ListJobsRequest({

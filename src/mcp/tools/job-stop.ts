@@ -4,7 +4,7 @@ import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-com
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
 import type { CallerIdentity } from "../../clients/sts.js";
-import type { Settings } from "../../config/schema.js";
+import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 import { validateJobOwnership } from "../../utils/validate.js";
 
@@ -18,7 +18,7 @@ function toText(payload: unknown): string {
 
 export function registerJobStopTool(
   server: McpServer,
-  settings: Settings,
+  configStore: ConfigStore,
   dlcClient: DlcClientApi,
   callerIdentity: CallerIdentity,
 ): void {
@@ -44,6 +44,7 @@ export function registerJobStopTool(
         };
       }
 
+      const settings = configStore.get();
       const ownership = validateJobOwnership(job, settings.projectPrefix, callerIdentity.userId);
       if (!ownership.valid) {
         return {

@@ -1,7 +1,7 @@
 import type STSClient from "@alicloud/sts20150401";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallerIdentity } from "../../clients/sts.js";
-import type { Settings } from "../../config/schema.js";
+import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 
 function toText(payload: unknown): string {
@@ -10,7 +10,7 @@ function toText(payload: unknown): string {
 
 export function registerWhoamiTool(
   server: McpServer,
-  settings: Settings,
+  configStore: ConfigStore,
   _stsClient: STSClient,
   cachedIdentity: CallerIdentity,
 ): void {
@@ -21,6 +21,7 @@ export function registerWhoamiTool(
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (_extra) => {
+      const settings = configStore.get();
       const result = sanitizeObject({
         accountId: cachedIdentity.accountId,
         userId: cachedIdentity.userId,

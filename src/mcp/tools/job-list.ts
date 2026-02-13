@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
-import type { Settings } from "../../config/schema.js";
+import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 
 const jobListInputSchema = {
@@ -16,7 +16,7 @@ function toText(payload: unknown): string {
 
 export function registerJobListTool(
   server: McpServer,
-  settings: Settings,
+  configStore: ConfigStore,
   dlcClient: DlcClientApi,
 ): void {
   server.registerTool(
@@ -27,6 +27,7 @@ export function registerJobListTool(
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args, _extra) => {
+      const settings = configStore.get();
       const request = new ListJobsRequest({
         workspaceId: settings.workspaceId,
         showOwn: true,
