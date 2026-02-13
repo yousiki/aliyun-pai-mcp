@@ -733,7 +733,10 @@ export default async function initCommand(options?: { force?: boolean }): Promis
                   return [];
                 }
 
-                return [{ uri, mountPath }];
+                const mountAccess: MountAccess =
+                  dataSource.mountAccess === "RO" ? "ReadOnly" : "ReadWrite";
+
+                return [{ uri, mountPath, mountAccess }];
               }) ?? [];
 
             if (jobDataSources.length > 0 && mounts.length === 0) {
@@ -745,18 +748,33 @@ export default async function initCommand(options?: { force?: boolean }): Promis
               );
 
               if (importDataSourcesAsMounts) {
-                const importedMounts: Mount[] = jobDataSources.map((dataSource, index) => ({
-                  name: `ds-${index}`,
-                  uri: dataSource.uri,
-                  mountPath: dataSource.mountPath,
-                  mountAccess: "ReadWrite" as MountAccess,
-                }));
+                for (let i = 0; i < jobDataSources.length; i++) {
+                  const dataSource = jobDataSources[i]!;
+                  const mountAccess = ensureNotCancelled(
+                    await p.select({
+                      message: `Mount access for ${dataSource.mountPath}`,
+                      initialValue: dataSource.mountAccess,
+                      options: [
+                        { value: "ReadOnly", label: "ReadOnly" },
+                        { value: "ReadWrite", label: "ReadWrite" },
+                      ],
+                    }),
+                  ) as MountAccess;
 
-                mounts.push(...importedMounts);
+                  mounts.push({
+                    name: `ds-${i}`,
+                    uri: dataSource.uri,
+                    mountPath: dataSource.mountPath,
+                    mountAccess,
+                  });
+                }
 
                 p.note(
-                  importedMounts
-                    .map((mount) => `${mount.name}: ${mount.uri} -> ${mount.mountPath}`)
+                  mounts
+                    .map(
+                      (mount) =>
+                        `${mount.name}: ${mount.uri} -> ${mount.mountPath} (${mount.mountAccess})`,
+                    )
                     .join("\n"),
                   "Imported mounts",
                 );
