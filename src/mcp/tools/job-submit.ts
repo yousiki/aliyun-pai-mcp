@@ -117,8 +117,11 @@ export function registerJobSubmitTool(
           order: "desc",
         }),
       );
+      const expectedPrefix = `${settings.projectPrefix}-`;
       const activeJobs =
-        listResponse.body?.jobs?.filter((job) => isActiveStatus(job.status ?? "")) ?? [];
+        listResponse.body?.jobs
+          ?.filter((job) => (job.displayName ?? "").startsWith(expectedPrefix))
+          .filter((job) => isActiveStatus(job.status ?? "")) ?? [];
       if (activeJobs.length >= maxRunning) {
         const jobSummary = activeJobs.map((j) => `  - ${j.displayName} (${j.status})`).join("\n");
         return {

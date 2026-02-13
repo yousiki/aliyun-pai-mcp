@@ -177,7 +177,19 @@ pai_config_create_profile(name="my-preset", fromCurrent=true)
 → Saves current settings as a new profile named "my-preset"
 
 pai_config_create_profile(name="my-preset", fromCurrent=true, overrides={
-  "jobDefaults.jobSpecs[0].resourceConfig.GPU": "4"
+  jobSpecs: [
+    {
+      type: "Worker",
+      image: "registry.cn-hangzhou.aliyuncs.com/org/image:tag",
+      podCount: 1,
+      resourceConfig: {
+        GPU: "4",
+        CPU: "16",
+        memory: "64Gi",
+        sharedMemory: "64Gi"
+      }
+    }
+  ]
 })
 → Saves current settings with GPU override
 
@@ -185,9 +197,21 @@ pai_config_create_profile(name="my-preset", fromCurrent=true, overrides={
 pai_config_create_profile(
   name="custom",
   overrides={
-    "jobDefaults.jobSpecs[0].resourceConfig.GPU": "4",
-    "jobDefaults.jobSpecs[0].resourceConfig.memory": "64Gi",
-    "jobDefaults.jobSpecs[0].resourceConfig.CPU": "16"
+    jobType: "PyTorchJob",
+    jobSpecs: [
+      {
+        type: "Worker",
+        image: "registry.cn-hangzhou.aliyuncs.com/org/image:tag",
+        podCount: 1,
+        resourceConfig: {
+          GPU: "4",
+          CPU: "16",
+          memory: "64Gi",
+          sharedMemory: "64Gi"
+        }
+      }
+    ],
+    maxRunningJobs: 2
   }
 )
 → Creates a new profile with specified resource settings
@@ -224,10 +248,21 @@ pai_config_create_profile(
    pai_config_create_profile(
      name="medium",
      overrides={
-       "jobDefaults.jobSpecs[0].resourceConfig.GPU": "4",
-       "jobDefaults.jobSpecs[0].resourceConfig.memory": "64Gi"
-     }
-   )
+        jobSpecs: [
+          {
+            type: "Worker",
+            image: "registry.cn-hangzhou.aliyuncs.com/org/image:tag",
+            podCount: 1,
+            resourceConfig: {
+              GPU: "4",
+              CPU: "16",
+              memory: "64Gi",
+              sharedMemory: "64Gi"
+            }
+          }
+        ]
+      }
+    )
 2. Apply it: pai_config_apply_profile(name="medium")
 3. Submit job: pai_job_submit(name="train", command="...")
 

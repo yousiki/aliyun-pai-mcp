@@ -22,7 +22,11 @@ const createProfileInputSchema = {
     .describe("Profile name (lowercase alphanumeric + hyphens only)"),
   overrides: z
     .record(z.string(), z.unknown())
-    .describe("Config field overrides for this profile (only modifiable fields allowed)"),
+    .describe(
+      "Profile overrides using Profile fields directly: { jobSpecs: [...], " +
+        "jobType: 'PyTorchJob', mounts: [...], maxRunningJobs: 2 }. " +
+        "Only these top-level keys are allowed.",
+    ),
   fromCurrent: z
     .boolean()
     .optional()
@@ -98,7 +102,8 @@ export function registerConfigProfileTools(server: McpServer, configStore: Confi
     {
       description:
         "Create or update a named configuration profile. Profiles store resource presets " +
-        "(jobSpecs, jobType, mounts, maxRunningJobs) that can be quickly applied later. " +
+        "using Profile fields directly (jobSpecs, jobType, mounts, maxRunningJobs). " +
+        "Dot-path keys are not supported. " +
         "Use fromCurrent=true to snapshot current settings as a base before applying overrides. " +
         "Profile names must be lowercase alphanumeric with hyphens only.",
       inputSchema: createProfileInputSchema,

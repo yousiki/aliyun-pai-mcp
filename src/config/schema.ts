@@ -62,14 +62,24 @@ export const MountSchema = z.object({
 
 export type Mount = z.infer<typeof MountSchema>;
 
-export const ProfileSchema = z.object({
-  jobSpecs: z.array(JobSpecSchema).optional(),
-  jobType: z.string().min(1).optional(),
-  mounts: z.array(MountSchema).optional(),
-  maxRunningJobs: z.number().int().positive().optional(),
-});
+export const ProfileSchema = z
+  .object({
+    jobSpecs: z.array(JobSpecSchema).optional(),
+    jobType: z.string().min(1).optional(),
+    mounts: z.array(MountSchema).optional(),
+    maxRunningJobs: z.number().int().positive().optional(),
+  })
+  .strict();
 
 export type Profile = z.infer<typeof ProfileSchema>;
+
+const ProfileNameSchema = z
+  .string()
+  .regex(/^[a-z0-9-]+$/)
+  .refine(
+    (name) => name !== "default" && name !== "current",
+    "Profile name 'default' and 'current' are reserved",
+  );
 
 export const SettingsSchema = z.object({
   version: z.string().min(1),
@@ -83,7 +93,7 @@ export const SettingsSchema = z.object({
   jobDefaults: JobDefaultsSchema,
   mounts: z.array(MountSchema),
   maxRunningJobs: z.number().int().positive().optional(),
-  profiles: z.record(z.string(), ProfileSchema).optional(),
+  profiles: z.record(ProfileNameSchema, ProfileSchema).optional(),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;

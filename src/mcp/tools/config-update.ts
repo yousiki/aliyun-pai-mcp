@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { z } from "zod";
 
-import type { Settings } from "../../config/schema.js";
 import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 
@@ -18,32 +17,6 @@ const configUpdateInputSchema = {
 
 function toText(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
-}
-
-function expandDotPaths(flat: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-
-  for (const [dotPath, value] of Object.entries(flat)) {
-    const segments = dotPath.replace(/\[(\d+)\]/g, ".$1").split(".");
-    let current = result;
-
-    for (let i = 0; i < segments.length - 1; i++) {
-      const segment = segments[i] as string;
-      const nextSegment = segments[i + 1] as string;
-      const nextIsIndex = /^\d+$/.test(nextSegment);
-
-      if (current[segment] === undefined) {
-        current[segment] = nextIsIndex ? [] : {};
-      }
-
-      current = current[segment] as Record<string, unknown>;
-    }
-
-    const lastSegment = segments[segments.length - 1] as string;
-    current[lastSegment] = value;
-  }
-
-  return result;
 }
 
 export function registerConfigUpdateTool(server: McpServer, configStore: ConfigStore): void {
@@ -75,10 +48,22 @@ export function registerConfigUpdateTool(server: McpServer, configStore: ConfigS
         };
       }
 
-      const expanded = expandDotPaths(updates) as Partial<Settings>;
+      if (Object.keys(updates).length > 50) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Too many updates: maximum 50 keys allowed." }],
+        };
+      }
+
+      if (Object.keys(updates).some((key) => key.length === 0)) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Invalid updates: empty key is not allowed." }],
+        };
+      }
 
       try {
-        const diff = await configStore.update(expanded);
+        const diff = await configStore.updateByDotPaths(updates);
 
         if (Object.keys(diff.changed).length === 0) {
           return {

@@ -196,8 +196,8 @@ function buildSchema(settings: Record<string, unknown>): FieldGroup[] {
   groups.push({
     name: "Profiles",
     description:
-      "Named configuration presets. Use pai_config_update to manage profiles, " +
-      "or use pai_profile_apply / pai_profile_save tools if available.",
+      "Named configuration presets. Use pai_config_apply_profile to apply a profile, " +
+      "or pai_config_create_profile to create new ones.",
     fields: [
       {
         path: "profiles",
