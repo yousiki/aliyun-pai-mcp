@@ -14,7 +14,7 @@ import { loadSettings } from "../config/loader.js";
 import type { Mount, MountAccess, Settings } from "../config/schema.js";
 import { writeSettings } from "../config/writer.js";
 
-const SETTINGS_VERSION = "0.4.0";
+const SETTINGS_VERSION = "0.4.1";
 
 function ensureNotCancelled<T>(value: T | symbol): T {
   if (p.isCancel(value)) {

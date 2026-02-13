@@ -28,7 +28,7 @@ export async function startServer(): Promise<void> {
   const configStore = new ConfigStore(settings);
 
   const server = new McpServer(
-    { name: "aliyun-pai-mcp", version: "0.4.0" },
+    { name: "aliyun-pai-mcp", version: "0.4.1" },
     {
       instructions: `
 You are connected to Aliyun PAI-DLC via this MCP server.
