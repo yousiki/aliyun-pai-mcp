@@ -1,8 +1,20 @@
 {
   "name": "aliyun-pai-mcp",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "MCP server for Aliyun PAI-DLC distributed training",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yousiki/aliyun-pai-mcp.git"
+  },
+  "homepage": "https://github.com/yousiki/aliyun-pai-mcp",
+  "bugs": {
+    "url": "https://github.com/yousiki/aliyun-pai-mcp/issues"
+  },
+  "files": [
+    "src"
+  ],
   "bin": {
     "aliyun-pai-mcp": "src/index.ts"
   },

@@ -9,10 +9,28 @@ MCP server for Aliyun PAI-DLC. Lets coding agents (Claude Code, etc.) submit, mo
 
 ## Installation
 
+### Via bunx (recommended)
+
+No installation needed — runs directly from npm:
+
+```bash
+bunx aliyun-pai-mcp init
+```
+
+### Via global install
+
+```bash
+bun install -g aliyun-pai-mcp
+aliyun-pai-mcp init
+```
+
+### From source (development)
+
 ```bash
 git clone https://github.com/yousiki/aliyun-pai-mcp.git
 cd aliyun-pai-mcp
 bun install
+bun run src/index.ts init
 ```
 
 ## Quick Start
@@ -20,7 +38,7 @@ bun install
 ### 1. Initialize settings
 
 ```bash
-bun run src/index.ts init
+bunx aliyun-pai-mcp init
 ```
 
 The interactive wizard walks you through:
@@ -39,7 +57,7 @@ Settings are saved to `~/.config/aliyun-pai/settings.json` (chmod 600). Override
 ### 2. Verify setup
 
 ```bash
-bun run src/index.ts doctor
+bunx aliyun-pai-mcp doctor
 ```
 
 Checks credential validity (STS) and lists recent jobs with your prefix.
@@ -47,7 +65,7 @@ Checks credential validity (STS) and lists recent jobs with your prefix.
 ### 3. Add to Claude Code
 
 ```bash
-claude mcp add aliyun-pai -- bun run /path/to/aliyun-pai-mcp/src/index.ts server
+claude mcp add aliyun-pai -- bunx aliyun-pai-mcp server
 ```
 
 ## CLI Commands

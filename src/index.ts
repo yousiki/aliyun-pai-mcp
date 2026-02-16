@@ -4,7 +4,7 @@ import { Command } from "commander";
 
 const program = new Command();
 
-program.name("aliyun-pai-mcp").version("0.4.1").description("MCP server for Aliyun PAI-DLC");
+program.name("aliyun-pai-mcp").version("0.4.2").description("MCP server for Aliyun PAI-DLC");
 
 program
   .command("init")

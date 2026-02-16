@@ -315,7 +315,7 @@ Solution:
 Cause: Some fields are locked and cannot be changed via pai_config_update
 Locked fields: credentials, regionId, workspaceId, resourceId, projectPrefix, codeSource.codeSourceId
 Solution:
-1. These fields are set during initialization (bun run src/index.ts init)
+1. These fields are set during initialization (bunx aliyun-pai-mcp init)
 2. To change them, re-run initialization or manually edit ~/.config/aliyun-pai/settings.json
 3. For other fields, use pai_config_update or profiles
 

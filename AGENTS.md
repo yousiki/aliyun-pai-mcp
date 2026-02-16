@@ -81,13 +81,16 @@ aliyun-pai-mcp/
 ## COMMANDS
 
 ```bash
-# Install
+# User-facing (via npm)
+bunx aliyun-pai-mcp init                  # Initialize settings
+bunx aliyun-pai-mcp doctor                # Verify setup
+bunx aliyun-pai-mcp dump-job-specs <id>   # Extract jobSpecs from existing job
+
+# MCP integration (Claude Code)
+claude mcp add aliyun-pai -- bunx aliyun-pai-mcp server
+
+# Development (from source)
 bun install
-
-# Run CLI
-bun run src/index.ts [init|server|doctor|dump-job-specs <jobId>]
-
-# Development
 bun run dev                 # Runs src/index.ts
 bun run server              # Starts MCP server (stdio)
 
@@ -96,9 +99,6 @@ bun run typecheck           # TypeScript strict check
 bun run format              # Biome format --write
 bun run lint:fix            # Biome lint --write
 bun run check               # Full Biome check
-
-# MCP integration (Claude Code)
-claude mcp add aliyun-pai -- bun run /path/to/aliyun-pai-mcp/src/index.ts server
 ```
 
 ## NOTES
@@ -107,6 +107,6 @@ claude mcp add aliyun-pai -- bun run /path/to/aliyun-pai-mcp/src/index.ts server
 
 **No CI/CD** — Manual testing/deployment.
 
-**Bun-first** — Won't work with standard npm/Node.js without modifications.
+**Bun-first** — Requires Bun runtime. Published to npm, installable via `bunx` or `bun install -g`.
 
-**Settings initialization**: Run `bun run src/index.ts init` once to create `~/.config/aliyun-pai/settings.json`.
+**Settings initialization**: Run `bunx aliyun-pai-mcp init` once to create `~/.config/aliyun-pai/settings.json`.
