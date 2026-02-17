@@ -10,10 +10,6 @@ function toText(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
 }
 
-const applyProfileInputSchema = {
-  name: z.string().min(1).describe("Profile name to apply"),
-} as unknown as ZodRawShapeCompat;
-
 const createProfileInputSchema = {
   name: z
     .string()
@@ -24,13 +20,26 @@ const createProfileInputSchema = {
     .record(z.string(), z.unknown())
     .describe(
       "Profile overrides using Profile fields directly: { jobSpecs: [...], " +
-        "jobType: 'PyTorchJob', mounts: [...], maxRunningJobs: 2 }. " +
+        "jobType: 'PyTorchJob' }. " +
         "Only these top-level keys are allowed.",
     ),
   fromCurrent: z
     .boolean()
     .optional()
-    .describe("If true, snapshot current config as base, then apply overrides on top"),
+    .describe("If true, snapshot base profile as base, then apply overrides on top"),
+  baseProfile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Base profile to snapshot from when fromCurrent=true. Defaults to 'default'."),
+} as unknown as ZodRawShapeCompat;
+
+const deleteProfileInputSchema = {
+  name: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/)
+    .describe("Profile name to delete (cannot delete 'default')"),
 } as unknown as ZodRawShapeCompat;
 
 export function registerConfigProfileTools(server: McpServer, configStore: ConfigStore): void {
@@ -40,8 +49,7 @@ export function registerConfigProfileTools(server: McpServer, configStore: Confi
     {
       description:
         "List all saved configuration profiles. Each profile is a named preset " +
-        "of resource settings (jobSpecs, jobType, mounts, maxRunningJobs) that can be " +
-        "applied with pai_config_apply_profile. Returns an empty array if no profiles exist.",
+        'of resource settings (jobSpecs, jobType). A "default" profile always exists.',
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (_extra) => {
@@ -57,54 +65,15 @@ export function registerConfigProfileTools(server: McpServer, configStore: Confi
     },
   );
 
-  // --- pai_config_apply_profile ---
-  server.registerTool(
-    "pai_config_apply_profile",
-    {
-      description:
-        "Apply a saved configuration profile by name. Merges the profile's overrides " +
-        "into the current settings (jobSpecs, jobType, mounts, maxRunningJobs). " +
-        "Returns a diff showing what changed. Use pai_config_list_profiles to see available profiles.",
-      inputSchema: applyProfileInputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async (args, _extra) => {
-      try {
-        const diff = await configStore.applyProfile(args.name as string);
-        const result = sanitizeObject({
-          message: `Profile "${args.name}" applied.`,
-          changed: diff.changed,
-        });
-        return {
-          content: [{ type: "text", text: toText(result) }],
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes("does not exist")) {
-          return {
-            isError: true,
-            content: [{ type: "text", text: `Profile '${args.name}' not found` }],
-          };
-        }
-        throw error;
-      }
-    },
-  );
-
   // --- pai_config_create_profile ---
   server.registerTool(
     "pai_config_create_profile",
     {
       description:
         "Create or update a named configuration profile. Profiles store resource presets " +
-        "using Profile fields directly (jobSpecs, jobType, mounts, maxRunningJobs). " +
+        "using Profile fields directly (jobSpecs, jobType). " +
         "Dot-path keys are not supported. " +
-        "Use fromCurrent=true to snapshot current settings as a base before applying overrides. " +
+        "Use fromCurrent=true to snapshot a base profile before applying overrides. " +
         "Profile names must be lowercase alphanumeric with hyphens only.",
       inputSchema: createProfileInputSchema,
       annotations: {
@@ -118,27 +87,17 @@ export function registerConfigProfileTools(server: McpServer, configStore: Confi
       const name = args.name as string;
       const rawOverrides = args.overrides as Record<string, unknown>;
       const fromCurrent = args.fromCurrent as boolean | undefined;
+      const baseProfileName = (args.baseProfile as string | undefined) ?? "default";
 
       try {
         let overrides: Record<string, unknown>;
 
         if (fromCurrent === true) {
-          const settings = configStore.get();
-          const base: Record<string, unknown> = {};
-
-          if (settings.jobSpecs !== undefined) {
-            base.jobSpecs = settings.jobSpecs;
-          }
-          if (settings.jobType !== undefined) {
-            base.jobType = settings.jobType;
-          }
-          if (settings.mounts !== undefined) {
-            base.mounts = settings.mounts;
-          }
-          if (settings.maxRunningJobs !== undefined) {
-            base.maxRunningJobs = settings.maxRunningJobs;
-          }
-
+          const baseProfile = configStore.getProfile(baseProfileName);
+          const base: Record<string, unknown> = {
+            jobSpecs: baseProfile.jobSpecs,
+            jobType: baseProfile.jobType,
+          };
           overrides = { ...base, ...rawOverrides };
         } else {
           overrides = rawOverrides;
@@ -170,6 +129,49 @@ export function registerConfigProfileTools(server: McpServer, configStore: Confi
           return {
             isError: true,
             content: [{ type: "text", text: `Profile validation failed: ${message}` }],
+          };
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  // --- pai_config_delete_profile ---
+  server.registerTool(
+    "pai_config_delete_profile",
+    {
+      description:
+        "Delete a named configuration profile. Cannot delete the 'default' profile. " +
+        "Returns the name of the deleted profile on success.",
+      inputSchema: deleteProfileInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args, _extra) => {
+      const name = args.name as string;
+
+      try {
+        await configStore.deleteProfile(name);
+        return {
+          content: [{ type: "text", text: toText({ deleted: name }) }],
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        if (
+          message.includes("Cannot delete") ||
+          message.includes("does not exist") ||
+          message.includes("Invalid profile name") ||
+          message.includes("reserved")
+        ) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: `Cannot delete profile: ${message}` }],
           };
         }
 

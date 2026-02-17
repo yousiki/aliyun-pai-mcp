@@ -6,11 +6,19 @@ import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
 
 const configUpdateInputSchema = {
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Profile name to update. If omitted, updates apply to global settings (mounts, limits).",
+    ),
   updates: z
     .record(z.string(), z.unknown())
     .describe(
       "Map of field paths to new values. Supports dot-notation with array indices. " +
-        'Example: { "jobSpecs[0].resourceConfig.GPU": "8", "maxRunningJobs": 2 }. ' +
+        'Global example: { "limits.maxRunningJobs": 2 }. ' +
+        'With profile param: { "jobSpecs[0].resourceConfig.GPU": "8" }. ' +
         "Use pai_config_schema to see available fields and current values.",
     ),
 } as unknown as ZodRawShapeCompat;
@@ -37,6 +45,7 @@ export function registerConfigUpdateTool(server: McpServer, configStore: ConfigS
       },
     },
     async (args, _extra) => {
+      const profile = args.profile as string | undefined;
       const updates = args.updates as Record<string, unknown>;
 
       if (Object.keys(updates).length === 0) {
@@ -63,7 +72,24 @@ export function registerConfigUpdateTool(server: McpServer, configStore: ConfigS
       }
 
       try {
-        const diff = await configStore.updateByDotPaths(updates);
+        let updatesByDotPath = updates;
+
+        if (profile !== undefined) {
+          try {
+            configStore.getProfile(profile);
+          } catch (_error) {
+            return {
+              isError: true,
+              content: [{ type: "text", text: `Profile '${profile}' not found` }],
+            };
+          }
+
+          updatesByDotPath = Object.fromEntries(
+            Object.entries(updates).map(([path, value]) => [`profiles.${profile}.${path}`, value]),
+          );
+        }
+
+        const diff = await configStore.updateByDotPaths(updatesByDotPath);
 
         if (Object.keys(diff.changed).length === 0) {
           return {

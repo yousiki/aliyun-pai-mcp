@@ -14,9 +14,9 @@ export function registerConfigTool(server: McpServer, configStore: ConfigStore):
       description:
         "Show current MCP settings (sanitized, no secrets). " +
         "Returns project prefix, region, workspace, resource quota, " +
-        "job defaults (type, image, GPU/CPU/memory, pod count), " +
-        "data source mounts, and code source configuration. " +
-        "Call this first to understand what resources and mounts " +
+        "profiles (jobType + jobSpecs), global limits, " +
+        "global mounts, and code source configuration. " +
+        "Call this first to understand what profiles and constraints " +
         "will be used when submitting jobs.",
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
