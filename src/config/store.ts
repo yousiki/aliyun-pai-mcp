@@ -4,7 +4,6 @@ import type { Profile, Settings } from "./schema.js";
 import { ProfileSchema, SettingsSchema } from "./schema.js";
 import { writeSettings } from "./writer.js";
 
-// Security: these fields require re-initialization via 'init' and cannot be hot-updated
 const LOCKED_FIELDS: ReadonlyArray<string> = [
   "credentials",
   "regionId",
@@ -17,7 +16,7 @@ const LOCKED_FIELDS: ReadonlyArray<string> = [
 ];
 
 const PROFILE_NAME_REGEX = /^[a-z0-9-]+$/;
-const RESERVED_PROFILE_NAMES: ReadonlyArray<string> = ["default", "current"];
+const RESERVED_PROFILE_NAMES: ReadonlyArray<string> = ["current"];
 const PROTOTYPE_POLLUTION_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 const MAX_UPDATE_KEYS = 50;
 const MAX_PATH_DEPTH = 10;
@@ -240,6 +239,18 @@ export class ConfigStore {
     return deepClone(this.settings);
   }
 
+  getProfile(name: string): Profile {
+    const profile = this.settings.profiles[name];
+    if (!profile) {
+      throw new Error(`Profile "${name}" does not exist`);
+    }
+    return deepClone(profile);
+  }
+
+  getProfiles(): Record<string, Profile> {
+    return deepClone(this.settings.profiles);
+  }
+
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.updateQueue.then(fn, fn);
     this.updateQueue = result.then(
@@ -301,58 +312,26 @@ export class ConfigStore {
     });
   }
 
-  getProfiles(): Record<string, Profile> {
-    return deepClone(this.settings.profiles ?? {});
-  }
-
-  async setProfile(name: string, overrides: Profile): Promise<void> {
+  async setProfile(name: string, profile: Profile): Promise<void> {
     validateProfileName(name);
-    const validated = ProfileSchema.parse(overrides);
-    const profiles = { ...(this.settings.profiles ?? {}), [name]: validated };
+    const validated = ProfileSchema.parse(profile);
+    const profiles = { ...this.settings.profiles, [name]: validated };
     await this.update({ profiles });
-  }
-
-  async applyProfile(name: string): Promise<ConfigDiff> {
-    validateProfileName(name);
-
-    const profiles = this.settings.profiles ?? {};
-    const profile = profiles[name];
-    if (!profile) {
-      throw new Error(`Profile "${name}" does not exist`);
-    }
-
-    const changes: Partial<Settings> = {};
-
-    if (profile.jobSpecs !== undefined) {
-      changes.jobSpecs = profile.jobSpecs;
-    }
-
-    if (profile.jobType !== undefined) {
-      changes.jobType = profile.jobType;
-    }
-
-    if (profile.mounts !== undefined) {
-      changes.mounts = profile.mounts;
-    }
-
-    if (profile.maxRunningJobs !== undefined) {
-      changes.maxRunningJobs = profile.maxRunningJobs;
-    }
-
-    return this.update(changes);
   }
 
   async deleteProfile(name: string): Promise<void> {
     validateProfileName(name);
 
-    const profiles = { ...(this.settings.profiles ?? {}) };
+    if (name === "default") {
+      throw new Error('Cannot delete the "default" profile');
+    }
+
+    const profiles = { ...this.settings.profiles };
     if (!(name in profiles)) {
       throw new Error(`Profile "${name}" does not exist`);
     }
 
     delete profiles[name];
-
-    const updatedProfiles = Object.keys(profiles).length > 0 ? profiles : undefined;
-    await this.update({ profiles: updatedProfiles });
+    await this.update({ profiles });
   }
 }

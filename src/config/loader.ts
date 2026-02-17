@@ -5,6 +5,8 @@ import { ZodError } from "zod";
 import type { Settings } from "./schema.js";
 import { SettingsSchema } from "./schema.js";
 
+const CURRENT_VERSION = "0.5.0";
+
 export function getSettingsPath(): string {
   const envPath = process.env.ALIYUN_PAI_SETTINGS_PATH;
   if (envPath && envPath.trim().length > 0) {
@@ -12,6 +14,14 @@ export function getSettingsPath(): string {
   }
 
   return path.join(os.homedir(), ".config", "aliyun-pai", "settings.json");
+}
+
+function isLegacyFormat(parsed: unknown): boolean {
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return false;
+  }
+  const obj = parsed as Record<string, unknown>;
+  return "jobSpecs" in obj || "jobType" in obj || "maxRunningJobs" in obj;
 }
 
 export async function loadSettings(): Promise<Settings> {
@@ -31,6 +41,13 @@ export async function loadSettings(): Promise<Settings> {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to parse JSON in settings file at ${settingsPath}: ${message}`);
+  }
+
+  if (isLegacyFormat(parsed)) {
+    throw new Error(
+      `Settings file at ${settingsPath} uses an outdated format (pre-${CURRENT_VERSION}). ` +
+        "Please re-initialize: bunx aliyun-pai-mcp init",
+    );
   }
 
   try {
