@@ -13,11 +13,11 @@ const HELP_TEXT = `
 - Push to remote: git push
 
 ### Step 2: Configuration
-Before submitting jobs, ensure your configuration matches your needs:
+Before submitting jobs, verify profiles, limits, mounts, and code source:
 
 a) Inspect available settings:
    pai_config_schema()
-   → Returns the full schema with descriptions of all configurable fields
+   → Returns profile fields, global limits, mounts, and code source fields
 
 b) View current configuration:
    pai_config()
@@ -25,30 +25,33 @@ b) View current configuration:
 
 c) List available profiles:
    pai_config_list_profiles()
-   → Shows predefined resource profiles (e.g., "debug", "train")
+   → Shows profile names and their jobType/jobSpecs summaries
 
-d) Apply a profile:
-   pai_config_apply_profile(name="debug")
-   → Use "debug" for 1-GPU quick tests
-   → Use "train" for 8-GPU full training runs
-   → Profiles set image, GPU/CPU/memory, pod count, etc.
+d) Update global fields (all profiles share these):
+   pai_config_update(updates={
+     "limits.maxRunningJobs": 2,
+     "limits.maxGPU": 8,
+     "limits.maxCPU": 64
+   })
+   → Limits are global
+   → Mounts are global-only and updated via "mounts"
 
-e) Or update specific fields:
+e) Update a specific profile in-place:
    pai_config_update(updates={
      "jobSpecs[0].resourceConfig.GPU": "4",
-     "jobSpecs[0].resourceConfig.memory": "64Gi"
-   })
-   → Use JSON path notation for nested fields
-   → Changes persist until next update or profile application
+     "jobSpecs[0].resourceConfig.memory": "64Gi",
+     "jobType": "PyTorchJob"
+   }, profile="gpu-4")
+   → When profile is provided, updates target that profile
 
 ### Step 3: Job Submission
-pai_job_submit(name="train", command="python train.py --epochs 100")
+pai_job_submit(name="train", command="python train.py --epochs 100", profile="gpu-4")
 → System automatically:
   - Prepends your project prefix to the name
   - Adds timestamp: {prefix}-{name}-{timestamp}
   - Pulls code from configured branch/commit
-  - Applies resource config from settings
-  - Mounts data sources from settings
+  - Loads jobType + jobSpecs from the selected profile
+  - Applies global mounts and global limits
 → Returns jobId for monitoring
 
 ### Step 4: Monitoring
@@ -74,13 +77,13 @@ d) Wait for completion:
 If errors occur:
 - Fix code locally
 - git commit && git push
-- Optionally update config (pai_config_update or pai_config_apply_profile)
-- Resubmit: pai_job_submit(name="train-v2", command="...")
+- Optionally update config (profile or global fields)
+- Resubmit: pai_job_submit(name="train-v2", command="...", profile="gpu-4")
 - Repeat monitoring steps
 
 If resource issues (OOM, quota exceeded):
-- Adjust config: pai_config_update or pai_config_apply_profile
-- Resubmit with new resources
+- Adjust profile fields or limits via pai_config_update
+- Resubmit with updated resources
 
 
 ## 2. TOOL CATALOG
@@ -92,31 +95,26 @@ If resource issues (OOM, quota exceeded):
 
 - pai_config
   Show full MCP settings (sanitized, credentials redacted)
-  Includes default job settings (image, GPU/CPU/memory, pod count), mounts, code source config
+  Includes profiles, global limits, global mounts, and code source config
   Use to inspect current configuration before job submission
 
 - pai_config_schema
   Inspect the configuration schema with field descriptions and types
-  Use to understand what fields are available and how to structure updates
+  Use to understand profile fields and global fields for updates
 
 - pai_config_update
   Modify specific configuration fields using JSON path notation
-  Example: pai_config_update(updates={"jobSpecs[0].resourceConfig.GPU": "8"})
-  Changes persist until next update or profile application
+  Optional profile parameter targets a specific profile
+  Example (global): pai_config_update(updates={"limits.maxRunningJobs": 2})
+  Example (profile): pai_config_update(updates={"jobSpecs[0].resourceConfig.GPU": "8"}, profile="gpu-8")
 
 - pai_config_list_profiles
-  List all saved configuration profiles with their settings
-  Profiles are named presets for resource configurations
-
-- pai_config_apply_profile
-  Apply a saved profile to current configuration
-  Example: pai_config_apply_profile(name="debug") for 1-GPU testing
-  Example: pai_config_apply_profile(name="train") for 8-GPU training
+  List all saved configuration profiles with summaries
+  Profiles are the primary source for jobType and jobSpecs
 
 - pai_config_create_profile
-  Create a new profile from current config or with custom overrides
-  Example: pai_config_create_profile(name="my-preset", fromCurrent=true)
-  Example: pai_config_create_profile(name="custom", overrides={...})
+  Create or update a named profile with overrides
+  Example: pai_config_create_profile(name="gpu-4", baseProfile="default", overrides={...})
 
 ### Jobs
 - pai_job_list
@@ -131,9 +129,9 @@ If resource issues (OOM, quota exceeded):
 
 - pai_job_submit
   Submit a new DLC job
-  Required: name (short task name), command (shell command to run)
+  Required: name (short task name), command (shell command), profile (defaults to "default")
   Optional: codeCommit (git commit to checkout)
-  Everything else (image, resources, mounts) comes from settings
+  jobType + jobSpecs come from selected profile; mounts/limits are global
   Returns jobId for monitoring
 
 - pai_job_stop
@@ -159,24 +157,26 @@ If resource issues (OOM, quota exceeded):
 
 ## 3. CONFIG PROFILE USAGE
 
-Profiles are named presets for resource configurations. They simplify switching between different resource allocations (e.g., debug vs. production).
+Profiles are named presets for job configuration. Each profile contains jobType + jobSpecs.
+Jobs pick a profile at submit time via the profile parameter.
 
 ### List Available Profiles
 pai_config_list_profiles()
-→ Shows all saved profiles with their settings
+→ Shows all saved profiles with summary fields
 
-### Apply a Profile
-pai_config_apply_profile(name="debug")
-→ Applies the "debug" profile (typically 1 GPU, small memory)
+### Submit with a Profile
+pai_job_submit(name="debug-run", command="python train.py --epochs 1", profile="default")
+→ Uses the selected profile for jobType + resources
 
-pai_config_apply_profile(name="train")
-→ Applies the "train" profile (typically 8 GPU, large memory)
+pai_job_submit(name="train-run", command="python train.py --epochs 100", profile="gpu-8")
+→ Switch profiles per job without mutating global runtime state
 
-### Create Profile from Current Config
+### Create Profile from Existing Profile
 pai_config_create_profile(name="my-preset", fromCurrent=true)
-→ Saves current settings as a new profile named "my-preset"
+→ Copies the active/default base profile into a new named profile
 
-pai_config_create_profile(name="my-preset", fromCurrent=true, overrides={
+pai_config_create_profile(name="my-preset", baseProfile="default", overrides={
+  jobType: "PyTorchJob",
   jobSpecs: [
     {
       type: "Worker",
@@ -191,7 +191,7 @@ pai_config_create_profile(name="my-preset", fromCurrent=true, overrides={
     }
   ]
 })
-→ Saves current settings with GPU override
+→ Creates/updates a profile with explicit overrides
 
 ### Create Profile from Scratch
 pai_config_create_profile(
@@ -210,31 +210,30 @@ pai_config_create_profile(
           sharedMemory: "64Gi"
         }
       }
-    ],
-    maxRunningJobs: 2
+    ]
   }
 )
-→ Creates a new profile with specified resource settings
+→ Creates a new profile; limits remain global under limits.*
 
 
 ## 4. COMMON SCENARIOS
 
 ### Scenario A: Debug a Training Script
-1. Apply debug profile: pai_config_apply_profile(name="debug")
-2. Submit short test: pai_job_submit(name="test", command="python train.py --epochs 1 --debug")
-3. Monitor: pai_job_wait(jobId, target="Running") → pai_job_logs(jobId)
-4. If errors: fix locally, push, resubmit
+1. Submit short test with small profile:
+   pai_job_submit(name="test", command="python train.py --epochs 1 --debug", profile="debug")
+2. Monitor: pai_job_wait(jobId, target="Running") → pai_job_logs(jobId)
+3. If errors: fix locally, push, resubmit
 
 ### Scenario B: Scale Up for Production Training
-1. Apply train profile: pai_config_apply_profile(name="train")
-2. Submit full training: pai_job_submit(name="prod-train", command="python train.py --epochs 100")
-3. Monitor: pai_job_wait(jobId, target="Running") → pai_job_logs(jobId)
-4. Wait for completion: pai_job_wait(jobId, target="Terminal")
+1. Submit full training with larger profile:
+   pai_job_submit(name="prod-train", command="python train.py --epochs 100", profile="train")
+2. Monitor: pai_job_wait(jobId, target="Running") → pai_job_logs(jobId)
+3. Wait for completion: pai_job_wait(jobId, target="Terminal")
 
 ### Scenario C: Switch Branches
 1. Update branch: pai_config_update(updates={"codeSource.defaultBranch": "feature-x"})
 2. Verify: pai_config() → check codeSource.defaultBranch
-3. Submit job: pai_job_submit(name="test-feature", command="...")
+3. Submit job: pai_job_submit(name="test-feature", command="...", profile="default")
 4. IMPORTANT: Verify branch in logs (first few lines)
    → Branch switching via Aliyun API may be unreliable
 
@@ -247,24 +246,24 @@ pai_config_create_profile(
 1. Create custom profile:
    pai_config_create_profile(
      name="medium",
+     baseProfile="default",
      overrides={
-        jobSpecs: [
-          {
-            type: "Worker",
-            image: "registry.cn-hangzhou.aliyuncs.com/org/image:tag",
-            podCount: 1,
-            resourceConfig: {
-              GPU: "4",
-              CPU: "16",
-              memory: "64Gi",
-              sharedMemory: "64Gi"
-            }
-          }
-        ]
-      }
-    )
-2. Apply it: pai_config_apply_profile(name="medium")
-3. Submit job: pai_job_submit(name="train", command="...")
+       jobSpecs: [
+         {
+           type: "Worker",
+           image: "registry.cn-hangzhou.aliyuncs.com/org/image:tag",
+           podCount: 1,
+           resourceConfig: {
+             GPU: "4",
+             CPU: "16",
+             memory: "64Gi",
+             sharedMemory: "64Gi"
+           }
+         }
+       ]
+     }
+   )
+2. Submit job: pai_job_submit(name="train", command="...", profile="medium")
 
 
 ## 5. TROUBLESHOOTING
@@ -274,7 +273,7 @@ Cause: Insufficient quota or all resources in use
 Solution:
 1. Check active jobs: pai_job_list()
 2. Stop old/failed jobs: pai_job_stop(jobId)
-3. Reduce resource requirements: pai_config_apply_profile(name="debug")
+3. Submit with a smaller profile: pai_job_submit(name="retry", command="...", profile="debug")
 4. Resubmit with lower resources
 
 ### Wrong Branch Deployed
@@ -283,7 +282,7 @@ Solution:
 1. Always verify branch/commit in job logs (first few lines)
 2. If wrong branch: update config and resubmit
    pai_config_update(updates={"codeSource.defaultBranch": "correct-branch"})
-   pai_job_submit(name="retry", command="...")
+   pai_job_submit(name="retry", command="...", profile="default")
 3. Check logs again to confirm correct branch
 
 ### Out of Quota
@@ -292,7 +291,8 @@ Solution:
 1. List active jobs: pai_job_list()
 2. Stop unnecessary jobs: pai_job_stop(jobId)
 3. Wait for jobs to complete: pai_job_wait(jobId, target="Terminal")
-4. Resubmit with freed quota
+4. Optionally tighten limits globally:
+   pai_config_update(updates={"limits.maxRunningJobs": 1})
 
 ### Import Errors in Logs
 Cause: Code not pushed to correct branch, or dependencies missing
@@ -300,8 +300,8 @@ Solution:
 1. Verify code pushed: git push
 2. Check branch in logs: pai_job_logs(jobId)
 3. If wrong branch: update config and resubmit
-4. If dependencies missing: update Docker image in config
-   pai_config_update(updates={"jobSpecs[0].image": "new-image:tag"})
+4. If dependencies missing: update image in a profile
+   pai_config_update(updates={"jobSpecs[0].image": "new-image:tag"}, profile="default")
 
 ### Job Fails Immediately
 Cause: Command error, missing files, or resource issues
@@ -309,7 +309,7 @@ Solution:
 1. Check logs: pai_job_logs(jobId)
 2. Look for error messages in stdout/stderr
 3. Fix code locally, push, resubmit
-4. If OOM: increase memory via pai_config_update or profile
+4. If OOM: increase memory via pai_config_update(..., profile="...")
 
 ### Cannot Modify Locked Fields
 Cause: Some fields are locked and cannot be changed via pai_config_update
@@ -317,7 +317,7 @@ Locked fields: credentials, regionId, workspaceId, resourceId, projectPrefix, co
 Solution:
 1. These fields are set during initialization (bunx aliyun-pai-mcp init)
 2. To change them, re-run initialization or manually edit ~/.config/aliyun-pai/settings.json
-3. For other fields, use pai_config_update or profiles
+3. For other fields, use pai_config_update (global or profile-scoped)
 
 
 ## 6. SECURITY RULES
