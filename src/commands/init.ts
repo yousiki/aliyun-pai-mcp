@@ -11,10 +11,10 @@ import { createDLCClient } from "../clients/dlc.js";
 import { createSTSClient, getCallerIdentity } from "../clients/sts.js";
 import { createWorkspaceClient } from "../clients/workspace.js";
 import { loadSettings } from "../config/loader.js";
-import type { Mount, MountAccess, Settings } from "../config/schema.js";
+import type { Mount, MountAccess, Profile, Settings } from "../config/schema.js";
 import { writeSettings } from "../config/writer.js";
 
-const SETTINGS_VERSION = "0.4.1";
+const SETTINGS_VERSION = "0.5.0";
 
 function ensureNotCancelled<T>(value: T | symbol): T {
   if (p.isCancel(value)) {
@@ -598,7 +598,7 @@ export default async function initCommand(options?: { force?: boolean }): Promis
   const jobType = ensureNotCancelled(
     await p.select({
       message: "Default job type",
-      initialValue: existingSettings?.jobType,
+      initialValue: existingSettings?.profiles?.default?.jobType,
       options: [
         { value: "PyTorchJob", label: "PyTorchJob" },
         { value: "TFJob", label: "TFJob" },
@@ -618,18 +618,20 @@ export default async function initCommand(options?: { force?: boolean }): Promis
 
   let copiedJobSpecs: Record<string, unknown>[] = [];
 
-  const hasExistingJobSpecs = existingSettings?.jobSpecs && existingSettings.jobSpecs.length > 0;
+  const existingDefaultProfile = existingSettings?.profiles?.default;
+  const existingJobSpecs = existingDefaultProfile?.jobSpecs;
+  const hasExistingJobSpecs = existingJobSpecs && existingJobSpecs.length > 0;
 
   if (hasExistingJobSpecs) {
     const keepExistingJobSpecs = ensureNotCancelled(
       await p.confirm({
-        message: `Keep ${existingSettings!.jobSpecs.length} existing jobSpec(s)?`,
+        message: `Keep ${existingJobSpecs.length} existing jobSpec(s) from default profile?`,
         initialValue: true,
       }),
     );
 
     if (keepExistingJobSpecs) {
-      copiedJobSpecs = existingSettings!.jobSpecs.map((spec) =>
+      copiedJobSpecs = existingJobSpecs.map((spec: Record<string, unknown>) =>
         JSON.parse(JSON.stringify(spec)),
       ) as Record<string, unknown>[];
 
@@ -794,6 +796,20 @@ export default async function initCommand(options?: { force?: boolean }): Promis
     }
   }
 
+  const defaultProfile: Profile = {
+    jobSpecs: copiedJobSpecs,
+    jobType,
+  };
+
+  const existingProfiles = existingSettings?.profiles ?? {};
+  const mergedProfiles: Record<string, Profile> = {};
+  for (const [name, profile] of Object.entries(existingProfiles)) {
+    if (name !== "default") {
+      mergedProfiles[name] = profile;
+    }
+  }
+  mergedProfiles.default = defaultProfile;
+
   const settings: Settings = {
     version: SETTINGS_VERSION,
     projectPrefix,
@@ -813,9 +829,9 @@ export default async function initCommand(options?: { force?: boolean }): Promis
           defaultCommit: null,
         }
       : undefined,
-    jobType,
-    jobSpecs: copiedJobSpecs,
     mounts,
+    limits: existingSettings?.limits,
+    profiles: mergedProfiles,
   };
 
   if (existingSettings) {
@@ -839,12 +855,13 @@ export default async function initCommand(options?: { force?: boolean }): Promis
     ) {
       changes.push("credentials: updated");
     }
-    if (jobType !== existingSettings.jobType) {
-      changes.push(`jobType: ${existingSettings.jobType} → ${jobType}`);
+    const oldDefault = existingSettings.profiles?.default;
+    if (jobType !== oldDefault?.jobType) {
+      changes.push(`jobType: ${oldDefault?.jobType ?? "-"} → ${jobType}`);
     }
-    if (JSON.stringify(copiedJobSpecs) !== JSON.stringify(existingSettings.jobSpecs)) {
+    if (JSON.stringify(copiedJobSpecs) !== JSON.stringify(oldDefault?.jobSpecs)) {
       changes.push(
-        `jobSpecs: ${existingSettings.jobSpecs.length} → ${copiedJobSpecs.length} specs`,
+        `jobSpecs: ${oldDefault?.jobSpecs?.length ?? 0} → ${copiedJobSpecs.length} specs`,
       );
     }
     if (JSON.stringify(mounts) !== JSON.stringify(existingSettings.mounts)) {
