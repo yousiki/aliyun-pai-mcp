@@ -45,3 +45,65 @@ export function isTerminalStatus(status: string): boolean {
 export function isActiveStatus(status: string): boolean {
   return status !== "" && !isTerminalStatus(status);
 }
+
+export interface ResourceUsage {
+  gpu: number;
+  cpu: number;
+}
+
+/**
+ * Extract total GPU and CPU usage from an array of jobSpecs.
+ * Handles podCount (multiplied per spec type) and string-typed resource values.
+ * Returns { gpu: 0, cpu: 0 } for empty or malformed specs.
+ */
+export function extractResources(jobSpecs: ReadonlyArray<Record<string, unknown>>): ResourceUsage {
+  let gpu = 0;
+  let cpu = 0;
+
+  for (const spec of jobSpecs) {
+    const podCount = typeof spec.podCount === "number" ? spec.podCount : 1;
+    const resourceConfig = spec.resourceConfig;
+
+    if (
+      resourceConfig !== null &&
+      resourceConfig !== undefined &&
+      typeof resourceConfig === "object" &&
+      !Array.isArray(resourceConfig)
+    ) {
+      const rc = resourceConfig as Record<string, unknown>;
+      const specGPU = Number.parseInt(String(rc.GPU ?? "0"), 10) || 0;
+      const specCPU = Number.parseInt(String(rc.CPU ?? "0"), 10) || 0;
+      gpu += specGPU * podCount;
+      cpu += specCPU * podCount;
+    }
+  }
+
+  return { gpu, cpu };
+}
+
+/**
+ * Format resource usage into a human-readable summary string.
+ * Example: "Worker×2: CPU=64, GPU=8, Memory=512Gi"
+ */
+export function formatJobSpecsSummary(jobSpecs: ReadonlyArray<Record<string, unknown>>): string {
+  return jobSpecs
+    .map((spec) => {
+      const specType = typeof spec.type === "string" ? spec.type : "Worker";
+      const podCount = typeof spec.podCount === "number" ? spec.podCount : 1;
+      const rc =
+        spec.resourceConfig !== null &&
+        spec.resourceConfig !== undefined &&
+        typeof spec.resourceConfig === "object" &&
+        !Array.isArray(spec.resourceConfig)
+          ? (spec.resourceConfig as Record<string, unknown>)
+          : {};
+
+      const parts = [`${specType}×${podCount}`];
+      if (rc.CPU !== undefined) parts.push(`CPU=${rc.CPU}`);
+      if (rc.GPU !== undefined) parts.push(`GPU=${rc.GPU}`);
+      if (rc.memory !== undefined) parts.push(`Memory=${rc.memory}`);
+
+      return parts.join(", ");
+    })
+    .join("; ");
+}
