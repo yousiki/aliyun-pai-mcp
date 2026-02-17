@@ -1,6 +1,6 @@
 {
   "name": "aliyun-pai-mcp",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "MCP server for Aliyun PAI-DLC distributed training",
   "type": "module",
   "license": "MIT",

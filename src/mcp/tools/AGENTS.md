@@ -1,12 +1,12 @@
 # MCP TOOLS MODULE
 
 ## OVERVIEW
-MCP tool implementations for Aliyun PAI-DLC operations. 14 TypeScript files registering 14 MCP tools.
+MCP tool implementations for Aliyun PAI-DLC operations. 12 TypeScript files registering 14 MCP tools.
 
 ## STRUCTURE
 ```
 tools/
-├── job-submit.ts         # pai_job_submit
+├── job-submit.ts         # pai_job_submit (accepts profile parameter)
 ├── job-list.ts           # pai_job_list
 ├── job-get.ts            # pai_job_get
 ├── job-stop.ts           # pai_job_stop
@@ -14,8 +14,8 @@ tools/
 ├── job-logs.ts           # pai_job_logs
 ├── config.ts             # pai_config
 ├── config-schema.ts      # pai_config_schema
-├── config-update.ts      # pai_config_update
-├── config-profiles.ts    # pai_config_list_profiles, pai_config_apply_profile, pai_config_create_profile
+├── config-update.ts      # pai_config_update (accepts profile parameter)
+├── config-profiles.ts    # pai_config_list_profiles, pai_config_create_profile, pai_config_delete_profile
 ├── whoami.ts             # pai_whoami
 └── help.ts               # pai_help
 ```
@@ -34,8 +34,8 @@ tools/
 | Inspect config schema | config-schema.ts | `registerConfigSchemaTool()` |
 | Update config | config-update.ts | `registerConfigUpdateTool()` |
 | List profiles | config-profiles.ts | `registerConfigProfileTools()` |
-| Apply profile | config-profiles.ts | `registerConfigProfileTools()` |
 | Create profile | config-profiles.ts | `registerConfigProfileTools()` |
+| Delete profile | config-profiles.ts | `registerConfigProfileTools()` |
 | Show identity | whoami.ts | `registerWhoamiTool()` |
 | Show help | help.ts | `registerHelpTool()` |
 

@@ -86,24 +86,24 @@ Once the server is running, agents have access to these tools:
 | Tool                         | Description                                                                                                                  |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `pai_whoami`                 | Show current caller identity and workspace context                                                                           |
-| `pai_config`                 | Show full MCP settings (sanitized). Includes default job settings (image, GPU/CPU/memory, pod count), mounts, and code source config |
+| `pai_config`                 | Show full MCP settings (sanitized). Includes profiles, global limits, mounts, and code source config                        |
 | `pai_config_schema`          | Inspect configuration schema with field descriptions and types                                                               |
-| `pai_config_update`          | Update modifiable configuration fields at runtime                                                                            |
+| `pai_config_update`          | Update modifiable configuration fields at runtime. Use `profile` parameter to target specific profiles                      |
 | `pai_config_list_profiles`   | List all saved configuration profiles                                                                                        |
-| `pai_config_apply_profile`   | Apply a saved configuration profile by name                                                                                  |
+| `pai_config_delete_profile`  | Delete a named configuration profile                                                                                         |
 | `pai_config_create_profile`  | Create or update a named configuration profile                                                                               |
 | `pai_help`                   | Show comprehensive usage guide                                                                                               |
 
 ### Jobs
 
-| Tool             | Description                                                                                                     |
-| ---------------- | --------------------------------------------------------------------------------------------------------------- |
-| `pai_job_list`   | List recent jobs for current project prefix                                                                     |
-| `pai_job_get`    | Get full details for a specific job (owner check only)                                                          |
-| `pai_job_submit` | Submit a new DLC job. Only `name` and `command` are specified — image, resources, mounts are driven by settings |
-| `pai_job_stop`   | Stop a running job (requires prefix + owner match)                                                              |
-| `pai_job_logs`   | Get pod logs for a job (owner check only)                                                                       |
-| `pai_job_wait`   | Poll until a job reaches Running or Terminal status                                                             |
+| Tool             | Description                                                                                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pai_job_list`   | List recent jobs for current project prefix                                                                                                                |
+| `pai_job_get`    | Get full details for a specific job (owner check only)                                                                                                     |
+| `pai_job_submit` | Submit a new DLC job. Specify `name`, `command`, and optional `profile` (defaults to "default"). Image, resources, mounts are driven by profile settings |
+| `pai_job_stop`   | Stop a running job (requires prefix + owner match)                                                                                                         |
+| `pai_job_logs`   | Get pod logs for a job (owner check only)                                                                                                                  |
+| `pai_job_wait`   | Poll until a job reaches Running or Terminal status                                                                                                        |
 
 ### How job submission works
 
@@ -111,27 +111,27 @@ When an agent calls `pai_job_submit`, it only provides:
 
 - **`name`** — a short task name (e.g. `train`, `eval`). The prefix is added automatically: `{prefix}-{name}-{timestamp}`
 - **`command`** — the shell command to run
+- **`profile`** (optional) — defaults to "default", selects which profile's jobSpecs/jobType to use
 - **`codeCommit`** (optional, deprecated) — git commit to checkout
 
 Everything else comes from settings:
 
-- Docker image, GPU/CPU/memory, pod count (from `jobSpecs`)
-- Data source mounts (from `mounts`)
+- Docker image, GPU/CPU/memory, pod count, job type (from the selected PROFILE's `jobSpecs` and `jobType`)
+- Data source mounts (from global `mounts`)
 - Code source (from `codeSource`, if configured)
-- Workspace, resource quota, job type
+- Workspace, resource quota
 
-Use `pai_config_schema` to understand available configuration, and `pai_config_apply_profile` or `pai_config_update` to adjust resources before submitting.
+Use `pai_config_schema` to see available profiles and limits, and `pai_job_submit(profile='gpu-4')` to select resources.
 
 ## Typical Agent Workflow
 
 ```
 1. Agent writes code locally → git commit && git push
-2. pai_config_schema                            # understand available configuration
-3. pai_config_apply_profile(name="debug")       # or pai_config_update(...) to set resources
-4. pai_job_submit(name="train", command="...")  # submit training job
-5. pai_job_wait(jobId, target="Running")        # wait for job to start
-6. pai_job_logs(jobId)                          # verify branch/commit in early output
-7. If error → fix code, push, resubmit. Iterate until success.
+2. pai_config_list_profiles                        # see available resource profiles
+3. pai_job_submit(name="train", command="...", profile="gpu-4")  # submit with profile
+4. pai_job_wait(jobId, target="Running")            # wait for job to start
+5. pai_job_logs(jobId)                              # verify branch/commit in early output
+6. If error → fix code, push, resubmit. Iterate until success.
 ```
 
 ## Settings Reference
@@ -140,7 +140,7 @@ Settings file: `~/.config/aliyun-pai/settings.json`
 
 ```jsonc
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "projectPrefix": "yousiki",
   "regionId": "ap-southeast-1",
   "workspaceId": "123456",
@@ -166,22 +166,50 @@ Settings file: `~/.config/aliyun-pai/settings.json`
     "defaultCommit": null,
   },
 
-  "jobType": "PyTorchJob",
-  // Copied from a past job during init, or via dump-job-specs
-  "jobSpecs": [
-    {
-      "type": "Worker",
-      "image": "your-image:tag",
-      "podCount": 1,
-      "resourceConfig": {
-        "CPU": "8",
-        "GPU": "1",
-        "memory": "32Gi",
-        "sharedMemory": "32Gi",
-      },
+  // Named resource profiles — "default" is required
+  "profiles": {
+    "default": {
+      "jobSpecs": [
+        {
+          "type": "Worker",
+          "image": "your-image:tag",
+          "podCount": 1,
+          "resourceConfig": {
+            "CPU": "8",
+            "GPU": "0",
+            "memory": "32Gi",
+            "sharedMemory": "32Gi",
+          },
+        },
+      ],
+      "jobType": "PyTorchJob",
     },
-  ],
+    "gpu-4": {
+      "jobSpecs": [
+        {
+          "type": "Worker",
+          "image": "your-image:tag",
+          "podCount": 1,
+          "resourceConfig": {
+            "CPU": "64",
+            "GPU": "4",
+            "memory": "512Gi",
+            "sharedMemory": "512Gi",
+          },
+        },
+      ],
+      "jobType": "PyTorchJob",
+    },
+  },
 
+  // Global resource limits (optional)
+  "limits": {
+    "maxRunningJobs": 5,
+    "maxGPU": 16,
+    "maxCPU": 128,
+  },
+
+  // Global data source mounts — shared across all profiles
   "mounts": [
     {
       "name": "data",
@@ -190,42 +218,6 @@ Settings file: `~/.config/aliyun-pai/settings.json`
       "mountAccess": "ReadOnly",
     },
   ],
-
-  // Optional — named configuration profiles for quick switching
-  "profiles": {
-    "debug": {
-      "jobSpecs": [
-        {
-          "type": "Worker",
-          "image": "your-image:tag",
-          "podCount": 1,
-          "resourceConfig": {
-            "CPU": "8",
-            "GPU": "1",
-            "memory": "32Gi",
-            "sharedMemory": "32Gi",
-          },
-        },
-      ],
-      "maxRunningJobs": 1,
-    },
-    "train": {
-      "jobSpecs": [
-        {
-          "type": "Worker",
-          "image": "your-image:tag",
-          "podCount": 1,
-          "resourceConfig": {
-            "CPU": "32",
-            "GPU": "8",
-            "memory": "256Gi",
-            "sharedMemory": "256Gi",
-          },
-        },
-      ],
-      "maxRunningJobs": 2,
-    },
-  },
 }
 ```
 
@@ -239,8 +231,9 @@ If using this MCP server with OpenCode, add these permission rules to your `oh-m
   "permission": {
     "external_directory": { "*": "deny" },
     "pai_config_update": "ask",
-    "pai_config_apply_profile": "ask",
-    "pai_config_create_profile": "ask"
+    "pai_config_delete_profile": "ask",
+    "pai_config_create_profile": "ask",
+    "pai_job_submit": "ask"
   }
 }
 ```

@@ -5,7 +5,7 @@
 **Branch:** main
 
 ## OVERVIEW
-MCP server for Aliyun PAI-DLC distributed training. CLI tool + stdio MCP server enabling coding agents to submit, monitor, and manage DLC jobs. TypeScript/Bun runtime. 14 MCP tools with dynamic configuration and profile support.
+MCP server for Aliyun PAI-DLC distributed training. CLI tool + stdio MCP server enabling coding agents to submit, monitor, and manage DLC jobs. TypeScript/Bun runtime. 14 MCP tools with profile-first configuration and resource limits.
 
 ## STRUCTURE
 ```
@@ -36,7 +36,7 @@ aliyun-pai-mcp/
 | Add CLI command | `src/commands/` | Export default async, import in index.ts |
 | Modify settings schema | `src/config/schema.ts` | Zod schemas, regenerate types |
 | Add API client | `src/clients/` | Factory pattern: `create*Client(creds, region)` |
-| Job validation logic | `src/utils/validate.ts` | Ownership, status checks, name generation |
+| Job validation logic | `src/utils/validate.ts` | Ownership, status checks, name generation, resource extraction |
 | Credential redaction | `src/utils/sanitize.ts` | Security: redact before output |
 | ConfigStore operations | `src/config/store.ts` | Mutable settings with locked field enforcement |
 
@@ -70,9 +70,9 @@ aliyun-pai-mcp/
 
 **Settings location**: `~/.config/aliyun-pai/settings.json` (not project root, not `.env`).
 
-**Settings shape**: `jobType` and `jobSpecs` are top-level fields (no `jobDefaults` wrapper).
+**Settings shape**: Profile-first — `profiles` (required `default`) hold `jobSpecs` + `jobType`. `mounts` and `limits` (maxRunningJobs/maxGPU/maxCPU) are global. No top-level jobSpecs/jobType.
 
-**Architecture**: Layered DI pattern — config → clients → tools. Settings loaded once, passed down.
+**Architecture**: Layered DI pattern — config → clients → tools. Settings loaded once, passed down. Legacy settings auto-migrated on load.
 
 **Security**: All tool outputs sanitized via `sanitizeObject()` or `sanitizeSettings()` before returning to agents.
 
