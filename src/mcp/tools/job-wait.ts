@@ -11,7 +11,15 @@ import { isTerminalStatus, validateJobOwnership } from "../../utils/validate.js"
 const jobWaitInputSchema = {
   jobId: z.string().min(1),
   target: z.enum(["Running", "Terminal"]).optional().default("Running"),
-  timeoutSec: z.number().int().positive().optional().default(900),
+  timeoutSec: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .default(30)
+    .describe(
+      "Max seconds to poll before returning current status. Default 30s. Call again to continue waiting.",
+    ),
   pollSec: z.number().int().positive().optional().default(10),
 } as unknown as ZodRawShapeCompat;
 
@@ -28,20 +36,20 @@ export function registerJobWaitTool(
   server.registerTool(
     "pai_job_wait",
     {
-      description: "Wait until a job reaches Running or Terminal status",
+      description:
+        "Poll a job until it reaches the target status or the timeout expires. " +
+        "Returns current status in both cases — NOT an error on timeout. " +
+        "Call again to continue waiting if 'reached' is false. Default timeout: 30s.",
       inputSchema: jobWaitInputSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async (args, extra) => {
+    async (args, _extra) => {
       const deadline = Date.now() + args.timeoutSec * 1000;
-      const progressToken = extra._meta?.progressToken;
-      const totalPolls = Math.ceil(args.timeoutSec / args.pollSec);
       let isOwnershipValidated = false;
       let lastStatus = "Unknown";
-      let pollCount = 0;
+      let lastJobSnapshot: Record<string, unknown> | undefined;
 
       while (Date.now() <= deadline) {
-        pollCount++;
         const response = await dlcClient.getJob(args.jobId, new GetJobRequest({}));
         const job = response.body;
 
@@ -72,58 +80,42 @@ export function registerJobWaitTool(
 
         const status = job.status ?? "Unknown";
         lastStatus = status;
+        lastJobSnapshot = {
+          jobId: job.jobId,
+          status: job.status,
+          displayName: job.displayName,
+          duration: job.duration,
+        };
 
-        if (args.target === "Running" && status === "Running") {
-          const result = sanitizeObject({
-            jobId: job.jobId,
-            status: job.status,
-            displayName: job.displayName,
-            duration: job.duration,
-          });
-          return {
-            content: [{ type: "text", text: toText(result) }],
-          };
+        const reached =
+          (args.target === "Running" && status === "Running") ||
+          (args.target === "Terminal" && isTerminalStatus(status));
+
+        if (reached) {
+          const result = sanitizeObject({ ...lastJobSnapshot, reached: true });
+          return { content: [{ type: "text", text: toText(result) }] };
         }
 
-        if (args.target === "Terminal" && isTerminalStatus(status)) {
+        if (isTerminalStatus(status) && args.target === "Running") {
           const result = sanitizeObject({
-            jobId: job.jobId,
-            status: job.status,
-            displayName: job.displayName,
-            duration: job.duration,
+            ...lastJobSnapshot,
+            reached: false,
+            message: `Job reached terminal status '${status}' before 'Running'.`,
           });
-          return {
-            content: [{ type: "text", text: toText(result) }],
-          };
-        }
-
-        // Send progress notification to keep the MCP client timeout alive.
-        // Clients with resetTimeoutOnProgress will reset their request timeout
-        // each time they receive this notification, preventing premature -32001 errors.
-        if (progressToken !== undefined) {
-          await extra.sendNotification({
-            method: "notifications/progress",
-            params: {
-              progressToken,
-              progress: pollCount,
-              total: totalPolls,
-              message: `Waiting for '${args.target}': poll ${pollCount}, current status '${status}'`,
-            },
-          });
+          return { content: [{ type: "text", text: toText(result) }] };
         }
 
         await Bun.sleep(args.pollSec * 1000);
       }
 
-      return {
-        isError: true,
-        content: [
-          {
-            type: "text",
-            text: `Timed out after ${args.timeoutSec}s waiting for '${args.jobId}' to reach '${args.target}'. Last status: ${lastStatus}.`,
-          },
-        ],
-      };
+      const result = sanitizeObject({
+        ...(lastJobSnapshot ?? { jobId: args.jobId, status: lastStatus }),
+        reached: false,
+        message:
+          `Not yet '${args.target}' after ${args.timeoutSec}s (current: '${lastStatus}'). ` +
+          "Call pai_job_wait again to continue waiting.",
+      });
+      return { content: [{ type: "text", text: toText(result) }] };
     },
   );
 }

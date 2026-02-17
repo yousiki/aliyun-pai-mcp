@@ -9,10 +9,15 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { z } from "zod";
 import type { DlcClientApi } from "../../clients/dlc.js";
-import type { MountAccess, Settings } from "../../config/schema.js";
+import type { MountAccess } from "../../config/schema.js";
 import type { ConfigStore } from "../../config/store.js";
 import { sanitizeObject } from "../../utils/sanitize.js";
-import { generateDisplayName, isActiveStatus } from "../../utils/validate.js";
+import {
+  extractResources,
+  formatJobSpecsSummary,
+  generateDisplayName,
+  isActiveStatus,
+} from "../../utils/validate.js";
 
 const jobSubmitInputSchema = {
   name: z
@@ -23,27 +28,15 @@ const jobSubmitInputSchema = {
         "Do NOT include the project prefix — it is prepended automatically. " +
         "Final displayName will be: {projectPrefix}-{name}-{timestamp}.",
     ),
-  command: z.string().min(1).describe("The shell command to run inside the container."),
-  codeBranch: z
+  command: z.string().min(1).describe("Shell command to run inside the container."),
+  profile: z
     .string()
     .min(1)
     .optional()
-    .describe(
-      "Git branch for code source. This is the primary way to control which code version runs. " +
-        "The job pulls the latest commit on this branch at start time. " +
-        "WARNING: Branch switching via Aliyun PAI API may occasionally be unreliable. " +
-        "Always verify the actual branch/commit in job logs after submission.",
-    ),
-  codeCommit: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      "[DEPRECATED — Aliyun API has known bugs with commit pinning. Use codeBranch instead. " +
-        "The job will always use the latest commit on the specified branch.] " +
-        "Git commit hash to checkout. If specified, behavior is unreliable — " +
-        "prefer pushing to branch and omitting this parameter.",
-    ),
+    .default("default")
+    .describe("Profile name to use for job resources. Defaults to 'default'."),
+  codeBranch: z.string().min(1).optional().describe("Git branch for code source."),
+  codeCommit: z.string().min(1).optional().describe("[DEPRECATED] Git commit hash to checkout."),
 } as unknown as ZodRawShapeCompat;
 
 function toText(payload: unknown): string {
@@ -59,12 +52,22 @@ const MOUNT_ACCESS_API_VALUES: Record<MountAccess, string> = {
   ReadWrite: "ReadWrite",
 };
 
-function buildJobSpecs(settings: Settings): JobSpec[] {
-  if (settings.jobSpecs.length === 0) {
+function toJobSpecsArray(value: unknown): ReadonlyArray<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(
+    (item): item is Record<string, unknown> => typeof item === "object" && item !== null,
+  );
+}
+
+function buildJobSpecs(jobSpecs: ReadonlyArray<Record<string, unknown>>): JobSpec[] {
+  if (jobSpecs.length === 0) {
     throw new Error("jobSpecs is empty: configure via pai_config_update or profiles.");
   }
 
-  return settings.jobSpecs.map((rawSpec) => new JobSpec(rawSpec));
+  return jobSpecs.map((rawSpec) => new JobSpec(rawSpec));
 }
 
 export function registerJobSubmitTool(
@@ -91,7 +94,13 @@ export function registerJobSubmitTool(
     },
     async (args, _extra) => {
       const settings = configStore.get();
-      const maxRunning = settings.maxRunningJobs ?? 1;
+      const profile = configStore.getProfile((args.profile as string) ?? "default");
+      const profileJobSpecs = toJobSpecsArray(profile.jobSpecs);
+      const requestedResources = extractResources(profileJobSpecs);
+
+      const maxRunning = settings.limits?.maxRunningJobs ?? 1;
+      const maxGPU = settings.limits?.maxGPU;
+      const maxCPU = settings.limits?.maxCPU;
       const listResponse = await dlcClient.listJobs(
         new ListJobsRequest({
           workspaceId: settings.workspaceId,
@@ -108,6 +117,7 @@ export function registerJobSubmitTool(
         listResponse.body?.jobs
           ?.filter((job) => (job.displayName ?? "").startsWith(expectedPrefix))
           .filter((job) => isActiveStatus(job.status ?? "")) ?? [];
+
       if (activeJobs.length >= maxRunning) {
         const jobSummary = activeJobs.map((j) => `  - ${j.displayName} (${j.status})`).join("\n");
         return {
@@ -116,7 +126,8 @@ export function registerJobSubmitTool(
             {
               type: "text",
               text:
-                `Concurrency limit reached: ${activeJobs.length}/${maxRunning} active job(s) for project '${settings.projectPrefix}'.\n` +
+                `Limit exceeded: maxRunningJobs (${maxRunning}). ` +
+                `Current active jobs: ${activeJobs.length}.\n` +
                 `Active jobs:\n${jobSummary}\n\n` +
                 "Wait for existing jobs to finish or stop them before submitting a new one.",
             },
@@ -124,18 +135,62 @@ export function registerJobSubmitTool(
         };
       }
 
+      const activeResources = activeJobs.reduce(
+        (acc, job) => {
+          const resources = extractResources(toJobSpecsArray(job.jobSpecs));
+          return {
+            gpu: acc.gpu + resources.gpu,
+            cpu: acc.cpu + resources.cpu,
+          };
+        },
+        { gpu: 0, cpu: 0 },
+      );
+
+      const projectedGPU = activeResources.gpu + requestedResources.gpu;
+      if (maxGPU !== undefined && projectedGPU > maxGPU) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text:
+                `Limit exceeded: maxGPU (${maxGPU}). ` +
+                `Current usage: ${activeResources.gpu}, requested: ${requestedResources.gpu}, ` +
+                `projected: ${projectedGPU}.`,
+            },
+          ],
+        };
+      }
+
+      const projectedCPU = activeResources.cpu + requestedResources.cpu;
+      if (maxCPU !== undefined && projectedCPU > maxCPU) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text:
+                `Limit exceeded: maxCPU (${maxCPU}). ` +
+                `Current usage: ${activeResources.cpu}, requested: ${requestedResources.cpu}, ` +
+                `projected: ${projectedCPU}.`,
+            },
+          ],
+        };
+      }
+
       const displayName = generateDisplayName(settings.projectPrefix, args.name);
+      const codeBranch = args.codeBranch ?? settings.codeSource?.defaultBranch;
       const request = new CreateJobRequest({
         workspaceId: settings.workspaceId,
         resourceId: settings.resourceId,
         displayName,
-        jobType: settings.jobType,
-        jobSpecs: buildJobSpecs(settings),
+        jobType: profile.jobType,
+        jobSpecs: buildJobSpecs(profileJobSpecs),
         userCommand: args.command,
         codeSource: settings.codeSource
           ? new CreateJobRequestCodeSource({
               codeSourceId: settings.codeSource.codeSourceId,
-              branch: args.codeBranch ?? settings.codeSource.defaultBranch,
+              branch: codeBranch,
               commit: args.codeCommit ?? undefined,
               mountPath: settings.codeSource.mountPath,
             })
@@ -157,7 +212,25 @@ export function registerJobSubmitTool(
         throw new Error("DLC createJob succeeded but no jobId was returned.");
       }
 
-      const result = sanitizeObject({ jobId, displayName });
+      const result = sanitizeObject({
+        jobId,
+        displayName,
+        submitted: {
+          profile: (args.profile as string) ?? "default",
+          jobType: profile.jobType,
+          image:
+            typeof profileJobSpecs[0]?.image === "string"
+              ? (profileJobSpecs[0].image as string)
+              : null,
+          resources: formatJobSpecsSummary(profileJobSpecs),
+          command: args.command,
+          codeBranch: codeBranch ?? null,
+          mounts: settings.mounts.map(
+            (mount, index) =>
+              `ds-${index}:${mount.mountPath}(${MOUNT_ACCESS_API_VALUES[mount.mountAccess]})`,
+          ),
+        },
+      });
       return {
         content: [{ type: "text", text: toText(result) }],
       };
